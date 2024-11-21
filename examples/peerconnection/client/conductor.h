@@ -28,6 +28,10 @@
 #include "examples/peerconnection/client/peer_connection_client.h"
 #include "rtc_base/thread.h"
 
+#include "examples/peerconnection/client/websocket_client.h"
+#include <curl/curl.h>
+#include "json/value.h"
+
 namespace webrtc {
 class VideoCaptureModule;
 }  // namespace webrtc
@@ -137,6 +141,18 @@ class Conductor : public webrtc::PeerConnectionObserver,
   MainWindow* main_wnd_;
   std::deque<std::string*> pending_messages_;
   std::string server_;
+
+ private:
+  std::unique_ptr<WebSocketClient> ws_client_;
+  //bool is_initiator_;
+  
+  void OnWebSocketMessage(const std::string& message);
+  void OnWebSocketConnection(bool connected);
+  
+  Json::Value messages_;
+  std::string client_id_;
+  std::string room_id_;
+  bool is_initiator_;
 };
 
 #endif  // EXAMPLES_PEERCONNECTION_CLIENT_CONDUCTOR_H_

@@ -67,10 +67,12 @@
 namespace {
 using webrtc::test::TestVideoCapturer;
 
+// AppRTC
+
 // Names used for a IceCandidate JSON object.
-const char kCandidateSdpMidName[] = "sdpMid";
-const char kCandidateSdpMlineIndexName[] = "sdpMLineIndex";
-const char kCandidateSdpName[] = "candidate";
+//const char kCandidateSdpMidName[] = "sdpMid";
+//const char kCandidateSdpMlineIndexName[] = "sdpMLineIndex";
+//const char kCandidateSdpName[] = "candidate";
 
 // Names used for a SessionDescription JSON object.
 const char kSessionDescriptionTypeName[] = "type";
@@ -286,7 +288,6 @@ void Conductor::OnRemoveTrack(
 
 void Conductor::OnIceCandidate(const webrtc::IceCandidateInterface* candidate) {
   RTC_LOG(LS_INFO) << __FUNCTION__ << " " << candidate->sdp_mline_index();
-  // For loopback test. To save some connecting delay.
   if (loopback_) {
     if (!peer_connection_->AddIceCandidate(candidate)) {
       RTC_LOG(LS_WARNING) << "Failed to apply the received candidate";
@@ -295,14 +296,15 @@ void Conductor::OnIceCandidate(const webrtc::IceCandidateInterface* candidate) {
   }
 
   Json::Value jmessage;
-  jmessage[kCandidateSdpMidName] = candidate->sdp_mid();
-  jmessage[kCandidateSdpMlineIndexName] = candidate->sdp_mline_index();
+  jmessage["type"] = "candidate";
+  jmessage["label"] = candidate->sdp_mline_index();
+  jmessage["id"] = candidate->sdp_mid();
   std::string sdp;
   if (!candidate->ToString(&sdp)) {
     RTC_LOG(LS_ERROR) << "Failed to serialize candidate";
     return;
   }
-  jmessage[kCandidateSdpName] = sdp;
+  jmessage["candidate"] = sdp;
 
   Json::StreamWriterBuilder factory;
   SendMessage(Json::writeString(factory, jmessage));
@@ -346,110 +348,105 @@ void Conductor::OnPeerDisconnected(int id) {
 }
 
 void Conductor::OnMessageFromPeer(int peer_id, const std::string& message) {
-  RTC_DCHECK(peer_id_ == peer_id || peer_id_ == -1);
   RTC_DCHECK(!message.empty());
 
-  if (!peer_connection_.get()) {
-    RTC_DCHECK(peer_id_ == -1);
-    peer_id_ = peer_id;
-
+  // Initialize PeerConnection if necessary
+  if (!peer_connection_) {
     if (!InitializePeerConnection()) {
-      RTC_LOG(LS_ERROR) << "Failed to initialize our PeerConnection instance";
-      client_->SignOut();
+      RTC_LOG(LS_ERROR) << "Failed to initialize PeerConnection";
       return;
     }
-  } else if (peer_id != peer_id_) {
-    RTC_DCHECK(peer_id_ != -1);
-    RTC_LOG(LS_WARNING)
-        << "Received a message from unknown peer while already in a "
-           "conversation with a different peer.";
-    return;
   }
 
-  Json::CharReaderBuilder factory;
-  std::unique_ptr<Json::CharReader> reader =
-      absl::WrapUnique(factory.newCharReader());
+  // Parse the incoming message
+  Json::CharReaderBuilder reader_builder;
+  std::unique_ptr<Json::CharReader> reader(reader_builder.newCharReader());
   Json::Value jmessage;
-  if (!reader->parse(message.data(), message.data() + message.length(),
-                     &jmessage, nullptr)) {
-    RTC_LOG(LS_WARNING) << "Received unknown message. " << message;
+  std::string errors;
+
+  if (!reader->parse(message.data(), message.data() + message.length(), &jmessage, &errors)) {
+    RTC_LOG(LS_WARNING) << "Failed to parse incoming message: " << errors;
     return;
   }
-  std::string type_str;
-  std::string json_object;
 
-  rtc::GetStringFromJsonObject(jmessage, kSessionDescriptionTypeName,
-                               &type_str);
-  if (!type_str.empty()) {
-    if (type_str == "offer-loopback") {
-      // This is a loopback call.
-      // Recreate the peerconnection with DTLS disabled.
-      if (!ReinitializePeerConnectionForLoopback()) {
-        RTC_LOG(LS_ERROR) << "Failed to initialize our PeerConnection instance";
-        DeletePeerConnection();
-        client_->SignOut();
-      }
-      return;
-    }
-    std::optional<webrtc::SdpType> type_maybe =
-        webrtc::SdpTypeFromString(type_str);
-    if (!type_maybe) {
-      RTC_LOG(LS_ERROR) << "Unknown SDP type: " << type_str;
-      return;
-    }
-    webrtc::SdpType type = *type_maybe;
+  // Extract the message type
+  std::string type;
+  if (!rtc::GetStringFromJsonObject(jmessage, "type", &type)) {
+    RTC_LOG(LS_WARNING) << "Message does not contain 'type'";
+    return;
+  }
+
+  if (type == "bye") {
+    RTC_LOG(LS_INFO) << "Received 'bye' message";
+    DisconnectFromCurrentPeer();
+    return;
+  }
+
+  if (type == "offer" || type == "answer") {
+    // Handle session description
     std::string sdp;
-    if (!rtc::GetStringFromJsonObject(jmessage, kSessionDescriptionSdpName,
-                                      &sdp)) {
-      RTC_LOG(LS_WARNING)
-          << "Can't parse received session description message.";
+    if (!rtc::GetStringFromJsonObject(jmessage, "sdp", &sdp)) {
+      RTC_LOG(LS_WARNING) << "Session description is missing 'sdp'";
       return;
     }
+
+    webrtc::SdpType sdp_type = (type == "offer") ? webrtc::SdpType::kOffer : webrtc::SdpType::kAnswer;
     webrtc::SdpParseError error;
     std::unique_ptr<webrtc::SessionDescriptionInterface> session_description =
-        webrtc::CreateSessionDescription(type, sdp, &error);
+        webrtc::CreateSessionDescription(sdp_type, sdp, &error);
     if (!session_description) {
-      RTC_LOG(LS_WARNING)
-          << "Can't parse received session description message. "
-             "SdpParseError was: "
-          << error.description;
+      RTC_LOG(LS_WARNING) << "Failed to parse session description: " << error.description;
       return;
     }
-    RTC_LOG(LS_INFO) << " Received session description :" << message;
+
+    RTC_LOG(LS_INFO) << "Received session description: " << type;
+
     peer_connection_->SetRemoteDescription(
         DummySetSessionDescriptionObserver::Create().get(),
         session_description.release());
-    if (type == webrtc::SdpType::kOffer) {
+
+    if (sdp_type == webrtc::SdpType::kOffer) {
       peer_connection_->CreateAnswer(
           this, webrtc::PeerConnectionInterface::RTCOfferAnswerOptions());
     }
-  } else {
-    std::string sdp_mid;
-    int sdp_mlineindex = 0;
-    std::string sdp;
-    if (!rtc::GetStringFromJsonObject(jmessage, kCandidateSdpMidName,
-                                      &sdp_mid) ||
-        !rtc::GetIntFromJsonObject(jmessage, kCandidateSdpMlineIndexName,
-                                   &sdp_mlineindex) ||
-        !rtc::GetStringFromJsonObject(jmessage, kCandidateSdpName, &sdp)) {
-      RTC_LOG(LS_WARNING) << "Can't parse received message.";
+    return;
+  }
+
+  if (type == "candidate") {
+    // Handle ICE candidate
+    std::string candidate_str;
+    if (!rtc::GetStringFromJsonObject(jmessage, "candidate", &candidate_str)) {
+      RTC_LOG(LS_WARNING) << "ICE candidate is missing 'candidate'";
       return;
     }
+    std::string sdp_mid;
+    if (!rtc::GetStringFromJsonObject(jmessage, "id", &sdp_mid)) {
+      RTC_LOG(LS_WARNING) << "ICE candidate is missing 'id'";
+      return;
+    }
+    int sdp_mline_index = 0;
+    if (!rtc::GetIntFromJsonObject(jmessage, "label", &sdp_mline_index)) {
+      RTC_LOG(LS_WARNING) << "ICE candidate is missing 'label'";
+      return;
+    }
+
     webrtc::SdpParseError error;
     std::unique_ptr<webrtc::IceCandidateInterface> candidate(
-        webrtc::CreateIceCandidate(sdp_mid, sdp_mlineindex, sdp, &error));
-    if (!candidate.get()) {
-      RTC_LOG(LS_WARNING) << "Can't parse received candidate message. "
-                             "SdpParseError was: "
-                          << error.description;
+     webrtc::CreateIceCandidate(sdp_mid, sdp_mline_index, candidate_str, &error));
+    if (!candidate) {
+      RTC_LOG(LS_WARNING) << "Failed to parse ICE candidate: " << error.description;
       return;
     }
+
     if (!peer_connection_->AddIceCandidate(candidate.get())) {
-      RTC_LOG(LS_WARNING) << "Failed to apply the received candidate";
+      RTC_LOG(LS_WARNING) << "Failed to add ICE candidate";
       return;
     }
-    RTC_LOG(LS_INFO) << " Received candidate :" << message;
+    RTC_LOG(LS_INFO) << "Added ICE candidate";
+    return;
   }
+
+  RTC_LOG(LS_WARNING) << "Received unknown message type: " << type;
 }
 
 void Conductor::OnMessageSent(int err) {
@@ -466,16 +463,200 @@ void Conductor::OnServerConnectionFailure() {
 // MainWndCallback implementation.
 //
 
+/*
 void Conductor::StartLogin(const std::string& server, int port) {
   if (client_->is_connected())
     return;
   server_ = server;
   client_->Connect(server, port, GetPeerName());
 }
+*/
+
+
+std::string GenerateRandomString(size_t length) {
+    static const char alphanum[] =
+        "0123456789"
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "abcdefghijklmnopqrstuvwxyz";
+    std::string result;
+    result.reserve(length);
+    for (size_t i = 0; i < length; ++i) {
+        result += alphanum[rand() % (sizeof(alphanum) - 1)];
+    }
+    return result;
+}
+
+size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
+  ((std::string*)userp)->append((char*)contents, size * nmemb);
+  return size * nmemb;
+}
+
+// websocket version for apprtc
+void Conductor::StartLogin(const std::string& server, int port) {
+  if (ws_client_) {
+    RTC_LOG(LS_WARNING) << "WebSocket client already exists";
+    return;
+  }
+
+  // Generate or set room ID
+  std::string room_id = GenerateRandomString(8);  // You can generate a random ID if needed
+
+  RTC_LOG(LS_INFO) << "Room number is "<<room_id;
+
+  // Perform HTTP POST to /join/{room_id}
+  std::string join_url = "https://" + server + "/join/" + room_id;
+
+  CURL* curl = curl_easy_init();
+  CURLcode res;
+  std::string read_buffer;
+
+  if(curl) {
+    curl_easy_setopt(curl, CURLOPT_URL, join_url.c_str());
+    curl_easy_setopt(curl, CURLOPT_POST, 1L);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &read_buffer);
+    // Skip SSL verification for testing (not recommended for production)
+    //curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+    //curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+    struct curl_slist *headers = nullptr;
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+    headers = curl_slist_append(headers, "User-Agent: peerconnection-client/1.0");
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
+    curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+    std::string payload = "{\"room_id\": \"" + room_id + "\"}";
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.c_str());
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, payload.length());
+    
+
+    RTC_LOG(LS_INFO) << "Server Response: " << read_buffer;
+
+    res = curl_easy_perform(curl);
+    if(res != CURLE_OK) {
+      RTC_LOG(LS_ERROR) << "curl_easy_perform() failed: " << curl_easy_strerror(res);
+      curl_easy_cleanup(curl);
+      return;
+    }
+    curl_easy_cleanup(curl);
+  } else {
+    RTC_LOG(LS_ERROR) << "Failed to initialize curl";
+    return;
+  }
+
+  // Parse the JSON response
+  Json::Reader reader;
+  Json::Value json_response;
+  if (!reader.parse(read_buffer, json_response)) {
+    RTC_LOG(LS_ERROR) << "Failed to parse join response: " << read_buffer;
+    return;
+  }
+
+  if (json_response["result"] != "SUCCESS") {
+    RTC_LOG(LS_ERROR) << "Join failed: " << json_response["result"].asString();
+    return;
+  }
+
+  Json::Value params = json_response["params"];
+
+  // Extract parameters
+  is_initiator_ = params["is_initiator"].asString() == "true";
+  std::string wss_url = params["wss_url"].asString();
+  client_id_ = params["client_id"].asString();
+  room_id_ = params["room_id"].asString();
+  messages_ = params["messages"];
+
+  // Now, connect to the WebSocket server at wss_url
+  ws_client_ = std::make_unique<WebSocketClient>();
+  ws_client_->SetMessageCallback(
+      std::bind(&Conductor::OnWebSocketMessage, this, std::placeholders::_1));
+  ws_client_->SetConnectionCallback(
+      std::bind(&Conductor::OnWebSocketConnection, this, std::placeholders::_1));
+
+  RTC_LOG(LS_INFO) << "Connecting to WebSocket server: " << wss_url;
+  ws_client_->Connect(wss_url);
+}
+
+void Conductor::OnWebSocketMessage(const std::string& message) {
+  Json::Reader reader;
+  Json::Value json;
+  if (!reader.parse(message, json)) {
+    RTC_LOG(LS_WARNING) << "Failed to parse WebSocket message: " << message;
+    return;
+  }
+
+  std::string type;
+  std::string msg_data;
+
+  if (json.isMember("msg")) {
+    // Unwrap the message
+    msg_data = json["msg"].asString();
+    Json::Value inner_json;
+    if (!reader.parse(msg_data, inner_json)) {
+      RTC_LOG(LS_WARNING) << "Failed to parse inner message: " << msg_data;
+      return;
+    }
+    if (inner_json.isMember("type")) {
+      type = inner_json["type"].asString();
+    }
+  } else if (json.isMember("type")) {
+    // Direct message
+    type = json["type"].asString();
+    msg_data = message;
+  }
+
+  if (!type.empty()) {
+    OnMessageFromPeer(-1, msg_data);
+  }
+}
+
+
+void Conductor::OnWebSocketConnection(bool connected) {
+  if (connected) {
+    RTC_LOG(LS_INFO) << "WebSocket connected, registering...";
+
+    // Send registration message
+    Json::Value reg_message;
+    reg_message["cmd"] = "register";
+    reg_message["roomid"] = room_id_;
+    reg_message["clientid"] = client_id_;
+
+    std::string message = rtc::JsonValueToString(reg_message);
+    ws_client_->SendMessage(message);
+
+    // Process any initial messages
+    if (messages_.isArray()) {
+      for (const auto& msg : messages_) {
+        OnMessageFromPeer(-1, msg.asString());
+      }
+    }
+
+    // If we are the initiator, create an offer
+    if (is_initiator_) {
+      if (InitializePeerConnection()) {
+        peer_connection_->CreateOffer(
+            this, webrtc::PeerConnectionInterface::RTCOfferAnswerOptions());
+      } else {
+        RTC_LOG(LS_ERROR) << "Failed to initialize PeerConnection";
+      }
+    }
+
+  } else {
+    RTC_LOG(LS_WARNING) << "WebSocket disconnected";
+    main_wnd_->MessageBox("Error", "WebSocket connection failed", true);
+  }
+}
 
 void Conductor::DisconnectFromServer() {
-  if (client_->is_connected())
-    client_->SignOut();
+  if (ws_client_) {
+    // Send bye message
+    Json::Value bye_message;
+    bye_message["type"] = "bye";
+    SendMessage(rtc::JsonValueToString(bye_message));
+    
+    ws_client_->Close();
+    ws_client_.reset();
+  }
 }
 
 void Conductor::ConnectToPeer(int peer_id) {
@@ -641,7 +822,24 @@ void Conductor::OnFailure(webrtc::RTCError error) {
   RTC_LOG(LS_ERROR) << ToString(error.type()) << ": " << error.message();
 }
 
+/*
 void Conductor::SendMessage(const std::string& json_object) {
   std::string* msg = new std::string(json_object);
   main_wnd_->QueueUIThreadCallback(SEND_MESSAGE_TO_PEER, msg);
+}
+*/
+void Conductor::SendMessage(const std::string& json_object) {
+  if (!ws_client_ || !ws_client_->IsConnected()) {
+    RTC_LOG(LS_ERROR) << "WebSocket not connected";
+    return;
+  }
+
+  // Wrap the message in AppRTC format
+  Json::Value wrapped_message;
+  wrapped_message["cmd"] = "send";
+  wrapped_message["msg"] = json_object;
+
+  std::string message = rtc::JsonValueToString(wrapped_message);
+  RTC_LOG(LS_INFO) << "Sending message: " << message;
+  ws_client_->SendMessage(message);
 }

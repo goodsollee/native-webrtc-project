@@ -669,6 +669,19 @@ if (is_linux || is_chromeos || is_win) {
         "gtk+-3.0",
       ]
     }
+    config("websocket_config") {
+      include_dirs = [
+        "/usr/local/include",  # libwebsockets headers
+      ]
+      lib_dirs = [
+        "/usr/local/lib",      # libwebsockets library
+      ]
+      libs = [
+        "curl",
+        "websockets",          # -lwebsockets
+        "cap",                 # -lcap if needed
+      ]
+    }
   }
 
   rtc_executable("peerconnection_client") {
@@ -752,6 +765,8 @@ if (is_linux || is_chromeos || is_win) {
         "peerconnection/client/linux/main.cc",
         "peerconnection/client/linux/main_wnd.cc",
         "peerconnection/client/linux/main_wnd.h",
+        "peerconnection/client/websocket_client.cc",
+        "peerconnection/client/websocket_client.h",
       ]
       cflags = [ "-Wno-deprecated-declarations" ]
       libs = [
@@ -761,6 +776,7 @@ if (is_linux || is_chromeos || is_win) {
         "Xrender",
       ]
       configs += [ ":gtk_config" ]
+      configs += [ ":websocket_config" ]
     }
 
     deps += [

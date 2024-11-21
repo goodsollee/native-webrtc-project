@@ -11,18 +11,15 @@ WebSocketClient::WebSocketClient()
   struct lws_context_creation_info info;
   memset(&info, 0, sizeof info);
 
-  static struct lws_protocols protocols[] = {
-      {
-        "apprtc",               // name
-        WebSocketClient::CallbackFunction,  // callback
-        sizeof(WebSocketClient*),           // per_session_data_size - important!
-        4096,                   // rx_buffer_size
-        0,                      // id
-        nullptr,               // user - will be set later
-        0                      // tx_packet_size
-      },
-      { nullptr, nullptr, 0, 0, 0, nullptr, 0 }  // terminator
-  };
+ static struct lws_protocols protocols[] = {
+    {
+      "apprtc",               // protocol name
+      WebSocketClient::CallbackFunction,  // callback function
+      sizeof(WebSocketClient*),           // per_session_data_size
+      4096,                   // receive buffer size
+    },
+    { nullptr, nullptr, 0, 0 }  // terminator
+ };
 
   // Set the user pointer to this instance
   protocols[0].user = this;
@@ -46,6 +43,33 @@ WebSocketClient::~WebSocketClient() {
   if (context_) {
     lws_context_destroy(context_);
   }
+}
+
+const char* GetCallbackReasonName(enum lws_callback_reasons reason) {
+    switch (reason) {
+        case LWS_CALLBACK_ESTABLISHED: return "LWS_CALLBACK_ESTABLISHED";
+        case LWS_CALLBACK_CLIENT_CONNECTION_ERROR: return "LWS_CALLBACK_CLIENT_CONNECTION_ERROR";
+        case LWS_CALLBACK_CLIENT_FILTER_PRE_ESTABLISH: return "LWS_CALLBACK_CLIENT_FILTER_PRE_ESTABLISH";
+        case LWS_CALLBACK_CLIENT_ESTABLISHED: return "LWS_CALLBACK_CLIENT_ESTABLISHED";
+        case LWS_CALLBACK_CLOSED: return "LWS_CALLBACK_CLOSED";
+        case LWS_CALLBACK_CLOSED_CLIENT_HTTP: return "LWS_CALLBACK_CLOSED_CLIENT_HTTP";
+        case LWS_CALLBACK_RECEIVE: return "LWS_CALLBACK_RECEIVE";
+        case LWS_CALLBACK_CLIENT_RECEIVE: return "LWS_CALLBACK_CLIENT_RECEIVE";
+        case LWS_CALLBACK_CLIENT_RECEIVE_PONG: return "LWS_CALLBACK_CLIENT_RECEIVE_PONG";
+        case LWS_CALLBACK_CLIENT_WRITEABLE: return "LWS_CALLBACK_CLIENT_WRITEABLE";
+        case LWS_CALLBACK_SERVER_WRITEABLE: return "LWS_CALLBACK_SERVER_WRITEABLE";
+        case LWS_CALLBACK_CLIENT_APPEND_HANDSHAKE_HEADER: return "LWS_CALLBACK_CLIENT_APPEND_HANDSHAKE_HEADER";
+        case LWS_CALLBACK_WSI_DESTROY: return "LWS_CALLBACK_WSI_DESTROY";
+        case LWS_CALLBACK_PROTOCOL_INIT: return "LWS_CALLBACK_PROTOCOL_INIT";
+        case LWS_CALLBACK_PROTOCOL_DESTROY: return "LWS_CALLBACK_PROTOCOL_DESTROY";
+        case LWS_CALLBACK_CLIENT_CLOSED: return "LWS_CALLBACK_CLIENT_CLOSED";
+        case LWS_CALLBACK_RECEIVE_CLIENT_HTTP_READ: return "LWS_CALLBACK_RECEIVE_CLIENT_HTTP_READ";
+        case LWS_CALLBACK_RECEIVE_CLIENT_HTTP: return "LWS_CALLBACK_RECEIVE_CLIENT_HTTP";
+        case LWS_CALLBACK_CLIENT_HTTP_WRITEABLE: return "LWS_CALLBACK_CLIENT_HTTP_WRITEABLE";
+        case LWS_CALLBACK_OPENSSL_LOAD_EXTRA_CLIENT_VERIFY_CERTS: return "LWS_CALLBACK_OPENSSL_LOAD_EXTRA_CLIENT_VERIFY_CERTS";
+        case LWS_CALLBACK_CLIENT_CONFIRM_EXTENSION_SUPPORTED: return "LWS_CALLBACK_CLIENT_CONFIRM_EXTENSION_SUPPORTED";
+        default: return "Unknown callback reason";
+    }
 }
 
 bool WebSocketClient::Connect(const std::string& url) {
@@ -88,7 +112,6 @@ bool WebSocketClient::Connect(const std::string& url) {
     RTC_LOG(LS_ERROR) << "Failed to connect websocket";
     return false;
   }
-  RTC_LOG(LS_INFO) << "Websocket connected...";
 
   return true;
 }
@@ -139,6 +162,9 @@ int WebSocketClient::CallbackFunction(struct lws *wsi,
 void WebSocketClient::HandleCallback(struct lws *wsi,
                                    enum lws_callback_reasons reason,
                                    void *user, void *in, size_t len) {
+  
+  RTC_LOG(LS_INFO) << "Handling callback reason: " << reason << " (" << GetCallbackReasonName(reason) << ")";
+               
   switch (reason) {
     case LWS_CALLBACK_CLIENT_ESTABLISHED:
       RTC_LOG(LS_INFO) << "WebSocket connected";
@@ -149,6 +175,7 @@ void WebSocketClient::HandleCallback(struct lws *wsi,
       break;
 
     case LWS_CALLBACK_CLIENT_RECEIVE:
+      RTC_LOG(LS_INFO) << "LWS_CALLBACK_CLIENT_RECEIVE triggered";
       if (in && len > 0) {
         std::string message(static_cast<char*>(in), len);
         RTC_LOG(LS_INFO) << "Received message: " << message;

@@ -64,6 +64,9 @@
 #include "test/platform_video_capturer.h"
 #include "test/test_video_capturer.h"
 
+#include <cstdlib>
+#include <ctime>
+
 namespace {
 using webrtc::test::TestVideoCapturer;
 
@@ -478,6 +481,14 @@ std::string GenerateRandomString(size_t length) {
         "0123456789"
         "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         "abcdefghijklmnopqrstuvwxyz";
+    static bool seeded = false;
+    
+    // Seed the random number generator once
+    if (!seeded) {
+        srand(static_cast<unsigned int>(time(nullptr)));
+        seeded = true;
+    }
+
     std::string result;
     result.reserve(length);
     for (size_t i = 0; i < length; ++i) {
@@ -522,7 +533,7 @@ void Conductor::StartLogin(const std::string& server, int port) {
     headers = curl_slist_append(headers, "Content-Type: application/json");
     headers = curl_slist_append(headers, "User-Agent: peerconnection-client/1.0");
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    
+
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
     curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
     std::string payload = "{\"room_id\": \"" + room_id + "\"}";

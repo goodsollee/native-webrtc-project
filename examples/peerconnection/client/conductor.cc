@@ -298,6 +298,7 @@ void Conductor::OnIceCandidate(const webrtc::IceCandidateInterface* candidate) {
     return;
   }
 
+  // Create candidate message
   Json::Value jmessage;
   jmessage["type"] = "candidate";
   jmessage["label"] = candidate->sdp_mline_index();
@@ -310,7 +311,16 @@ void Conductor::OnIceCandidate(const webrtc::IceCandidateInterface* candidate) {
   jmessage["candidate"] = sdp;
 
   Json::StreamWriterBuilder factory;
-  SendMessage(Json::writeString(factory, jmessage));
+  std::string message = Json::writeString(factory, jmessage);
+
+  // Only send if peer is connected, otherwise queue
+  if (peer_connected_) {
+    ws_client_->SendMessage(*pending_messages_.front());
+    pending_messages_.pop_front();
+  } else {
+    RTC_LOG(LS_INFO) << "Queuing ICE candidate until peer connects";
+    pending_messages_.push_back(new std::string(message));
+  }
 }
 
 //
@@ -387,6 +397,7 @@ void Conductor::OnMessageFromPeer(int peer_id, const std::string& message) {
 
   if (type == "offer" || type == "answer") {
     // Handle session description
+
     std::string sdp;
     if (!rtc::GetStringFromJsonObject(jmessage, "sdp", &sdp)) {
       RTC_LOG(LS_WARNING) << "Session description is missing 'sdp'";
@@ -412,6 +423,16 @@ void Conductor::OnMessageFromPeer(int peer_id, const std::string& message) {
       peer_connection_->CreateAnswer(
           this, webrtc::PeerConnectionInterface::RTCOfferAnswerOptions());
     }
+
+    RTC_LOG (LS_INFO) << "Set remote description";
+    peer_connected_ = true;
+
+    // Now we can send any pending ICE candidates
+    while (!pending_messages_.empty()) {
+        ws_client_->SendMessage(*pending_messages_.front());
+        pending_messages_.pop_front();
+    }
+
     return;
   }
 
@@ -511,7 +532,6 @@ void Conductor::StartLogin(const std::string& server, int port) {
 
   // Generate or set room ID
   std::string room_id = GenerateRandomString(8);  // You can generate a random ID if needed
-
   RTC_LOG(LS_INFO) << "Room number is "<<room_id;
 
   // Perform HTTP POST to /join/{room_id}
@@ -526,20 +546,21 @@ void Conductor::StartLogin(const std::string& server, int port) {
     curl_easy_setopt(curl, CURLOPT_POST, 1L);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &read_buffer);
-    // Skip SSL verification for testing (not recommended for production)
-    //curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-    //curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+
     struct curl_slist *headers = nullptr;
     headers = curl_slist_append(headers, "Content-Type: application/json");
     headers = curl_slist_append(headers, "User-Agent: peerconnection-client/1.0");
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
-    curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
-    std::string payload = "{\"room_id\": \"" + room_id + "\"}";
+    Json::Value join_payload;
+    join_payload["room_id"] = room_id;
+    Json::StreamWriterBuilder writer;
+    std::string payload = Json::writeString(writer, join_payload);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.c_str());
     curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, payload.length());
-    
+
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
+    curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
 
     RTC_LOG(LS_INFO) << "Server Response: " << read_buffer;
 
@@ -549,35 +570,40 @@ void Conductor::StartLogin(const std::string& server, int port) {
       curl_easy_cleanup(curl);
       return;
     }
+    curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
-  } else {
-    RTC_LOG(LS_ERROR) << "Failed to initialize curl";
+  }
+
+  /////
+  // Parse server response
+  Json::Value response;
+  Json::CharReaderBuilder reader;
+  std::istringstream response_stream(read_buffer);
+  std::string parse_errors;
+
+  if (!Json::parseFromStream(reader, response_stream, &response, &parse_errors)) {
+    RTC_LOG(LS_ERROR) << "Failed to parse join response: " << parse_errors;
     return;
   }
 
-  // Parse the JSON response
-  Json::Reader reader;
-  Json::Value json_response;
-  if (!reader.parse(read_buffer, json_response)) {
-    RTC_LOG(LS_ERROR) << "Failed to parse join response: " << read_buffer;
+  if (response["result"].asString() != "SUCCESS") {
+    RTC_LOG(LS_ERROR) << "Join failed: " << response["result"].asString();
     return;
   }
 
-  if (json_response["result"] != "SUCCESS") {
-    RTC_LOG(LS_ERROR) << "Join failed: " << json_response["result"].asString();
-    return;
-  }
-
-  Json::Value params = json_response["params"];
-
-  // Extract parameters
+  // Extract connection parameters
+  Json::Value params = response["params"];
   is_initiator_ = params["is_initiator"].asString() == "true";
   std::string wss_url = params["wss_url"].asString();
   client_id_ = params["client_id"].asString();
   room_id_ = params["room_id"].asString();
-  messages_ = params["messages"];
+  
+  // Store initial messages if any
+  if (params.isMember("messages") && params["messages"].isArray()) {
+    initial_messages_ = params["messages"];
+  }
 
-  // Now, connect to the WebSocket server at wss_url
+  // Connect to WebSocket server
   ws_client_ = std::make_unique<WebSocketClient>();
   ws_client_->SetMessageCallback(
       std::bind(&Conductor::OnWebSocketMessage, this, std::placeholders::_1));
@@ -589,36 +615,27 @@ void Conductor::StartLogin(const std::string& server, int port) {
 }
 
 void Conductor::OnWebSocketMessage(const std::string& message) {
-  Json::Reader reader;
-  Json::Value json;
-  if (!reader.parse(message, json)) {
-    RTC_LOG(LS_WARNING) << "Failed to parse WebSocket message: " << message;
+  Json::CharReaderBuilder reader;
+  Json::Value json_message;
+  std::string parse_errors;
+  std::istringstream message_stream(message);
+  
+  if (!Json::parseFromStream(reader, message_stream, &json_message, &parse_errors)) {
+    RTC_LOG(LS_WARNING) << "Failed to parse WebSocket message: " << parse_errors;
     return;
   }
 
-  std::string type;
   std::string msg_data;
-
-  if (json.isMember("msg")) {
-    // Unwrap the message
-    msg_data = json["msg"].asString();
-    Json::Value inner_json;
-    if (!reader.parse(msg_data, inner_json)) {
-      RTC_LOG(LS_WARNING) << "Failed to parse inner message: " << msg_data;
-      return;
-    }
-    if (inner_json.isMember("type")) {
-      type = inner_json["type"].asString();
-    }
-  } else if (json.isMember("type")) {
-    // Direct message
-    type = json["type"].asString();
+  if (json_message.isMember("msg")) {
+    // Unwrap the message from the WebSocket envelope
+    msg_data = json_message["msg"].asString();
+  } else {
     msg_data = message;
   }
 
-  if (!type.empty()) {
-    OnMessageFromPeer(-1, msg_data);
-  }
+  RTC_LOG(LS_INFO) << "WebSocket msg received "<<msg_data;
+  // Process the signaling message
+  OnMessageFromPeer(-1, msg_data);
 }
 
 
@@ -632,17 +649,19 @@ void Conductor::OnWebSocketConnection(bool connected) {
     reg_message["roomid"] = room_id_;
     reg_message["clientid"] = client_id_;
 
-    std::string message = rtc::JsonValueToString(reg_message);
+    Json::StreamWriterBuilder writer;
+    std::string message = Json::writeString(writer, reg_message);
     ws_client_->SendMessage(message);
 
     // Process any initial messages
-    if (messages_.isArray()) {
-      for (const auto& msg : messages_) {
+    if (!initial_messages_.empty()) {
+      for (const auto& msg : initial_messages_) {
         OnMessageFromPeer(-1, msg.asString());
       }
+      initial_messages_.clear();
     }
 
-    // If we are the initiator, create an offer
+    // If we're the initiator, create and send an offer
     if (is_initiator_) {
       if (InitializePeerConnection()) {
         peer_connection_->CreateOffer(
@@ -651,7 +670,6 @@ void Conductor::OnWebSocketConnection(bool connected) {
         RTC_LOG(LS_ERROR) << "Failed to initialize PeerConnection";
       }
     }
-
   } else {
     RTC_LOG(LS_WARNING) << "WebSocket disconnected";
     main_wnd_->MessageBox("Error", "WebSocket connection failed", true);
@@ -735,6 +753,12 @@ void Conductor::DisconnectFromCurrentPeer() {
     main_wnd_->SwitchToPeerList(client_->peers());
 }
 
+void Conductor::ServiceWebSocket() {
+    if (ws_client_) {
+        ws_client_->Service();
+    }
+}
+
 void Conductor::UIThreadCallback(int msg_id, void* data) {
   switch (msg_id) {
     case PEER_CONNECTION_CLOSED:
@@ -759,7 +783,7 @@ void Conductor::UIThreadCallback(int msg_id, void* data) {
         // For convenience, we always run the message through the queue.
         // This way we can be sure that messages are sent to the server
         // in the same order they were signaled without much hassle.
-        pending_messages_.push_back(msg);
+        pending_messages_.push_back(std::move(msg));
       }
 
       if (!pending_messages_.empty() && !client_->IsSendingMessage()) {
@@ -800,6 +824,7 @@ void Conductor::UIThreadCallback(int msg_id, void* data) {
       RTC_DCHECK_NOTREACHED();
       break;
   }
+  ServiceWebSocket();
 }
 
 void Conductor::OnSuccess(webrtc::SessionDescriptionInterface* desc) {
@@ -826,6 +851,9 @@ void Conductor::OnSuccess(webrtc::SessionDescriptionInterface* desc) {
   jmessage[kSessionDescriptionSdpName] = sdp;
 
   Json::StreamWriterBuilder factory;
+
+  RTC_LOG(LS_INFO) << "OnSuccess msg";
+
   SendMessage(Json::writeString(factory, jmessage));
 }
 

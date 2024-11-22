@@ -58,6 +58,8 @@ class Conductor : public webrtc::PeerConnectionObserver,
   bool connection_active() const;
 
   void Close() override;
+  
+  void ServiceWebSocket();
 
  protected:
   ~Conductor();
@@ -140,19 +142,22 @@ class Conductor : public webrtc::PeerConnectionObserver,
   PeerConnectionClient* client_;
   MainWindow* main_wnd_;
   std::deque<std::string*> pending_messages_;
-  std::string server_;
 
  private:
   std::unique_ptr<WebSocketClient> ws_client_;
-  //bool is_initiator_;
-  
+
   void OnWebSocketMessage(const std::string& message);
   void OnWebSocketConnection(bool connected);
   
   Json::Value messages_;
+  
+  bool is_initiator_;
+  bool peer_connected_ = false;
+  
   std::string client_id_;
   std::string room_id_;
-  bool is_initiator_;
+  std::string server_;
+  Json::Value initial_messages_;
 };
 
 #endif  // EXAMPLES_PEERCONNECTION_CLIENT_CONDUCTOR_H_

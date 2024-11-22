@@ -7,6 +7,12 @@
 #include <memory>
 #include <libwebsockets.h>
 #include <deque>
+#include "rtc_base/thread.h"
+
+#include "json/reader.h"
+#include "json/value.h"
+#include "json/writer.h"
+#include "rtc_base/strings/json.h"
 
 class WebSocketClient {
  public:
@@ -33,6 +39,7 @@ class WebSocketClient {
                             enum lws_callback_reasons reason,
                             void *user, void *in, size_t len);
 
+  void Service();
   bool ParseURL(const std::string& url);
 
  private:

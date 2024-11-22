@@ -46,6 +46,11 @@ class CustomSocketServer : public rtc::PhysicalSocketServer {
     while (gtk_events_pending())
       gtk_main_iteration();
 
+    // Service WebSocket client.
+    if (conductor_) {
+      conductor_->ServiceWebSocket();
+    }
+
     if (!wnd_->IsWindow() && !conductor_->connection_active() &&
         client_ != NULL && !client_->is_connected()) {
       message_queue_->Quit();

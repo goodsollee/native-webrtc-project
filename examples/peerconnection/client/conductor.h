@@ -158,6 +158,16 @@ class Conductor : public webrtc::PeerConnectionObserver,
   std::string room_id_;
   std::string server_;
   Json::Value initial_messages_;
+
+  std::string post_url_; // For HTTP POST when initiator
+
+  static bool curl_initialized_;
+  CURL* curl_ = nullptr;
+  static size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp);
+  bool InitializeCurl();
+  void CleanupCurl();
+  std::string response_buffer_;
+  
 };
 
 #endif  // EXAMPLES_PEERCONNECTION_CLIENT_CONDUCTOR_H_

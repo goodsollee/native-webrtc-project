@@ -145,14 +145,17 @@ class CapturerTrackSource : public webrtc::VideoTrackSource {
 
 }  // namespace
 
+bool Conductor::curl_initialized_ = false;
+
 Conductor::Conductor(PeerConnectionClient* client, MainWindow* main_wnd)
-    : peer_id_(-1), loopback_(false), client_(client), main_wnd_(main_wnd) {
+    : peer_id_(-1), loopback_(false), client_(client), main_wnd_(main_wnd), curl_(nullptr) {
   client_->RegisterObserver(this);
   main_wnd->RegisterObserver(this);
 }
 
 Conductor::~Conductor() {
   RTC_DCHECK(!peer_connection_);
+  CleanupCurl();
 }
 
 bool Conductor::connection_active() const {
@@ -163,6 +166,46 @@ void Conductor::Close() {
   client_->SignOut();
   DeletePeerConnection();
 }
+
+// Add static callback implementation:
+size_t Conductor::WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
+    size_t total_size = size * nmemb;
+    std::string* response = static_cast<std::string*>(userp);
+    response->append(static_cast<char*>(contents), total_size);
+    return total_size;
+}
+
+// In Conductor.cpp add the initialization code:
+bool Conductor::InitializeCurl() {
+    if (!curl_initialized_) {
+        curl_global_init(CURL_GLOBAL_ALL);
+        curl_initialized_ = true;
+    }
+
+    if (!curl_) {
+        curl_ = curl_easy_init();
+        if (!curl_) {
+            RTC_LOG(LS_ERROR) << "Failed to initialize CURL";
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+// Modify CleanupCurl:
+void Conductor::CleanupCurl() {
+    if (curl_) {
+        curl_easy_cleanup(curl_);
+        curl_ = nullptr;
+    }
+    
+    if (curl_initialized_) {
+        curl_global_cleanup();
+        curl_initialized_ = false;
+    }
+}
+
 
 bool Conductor::InitializePeerConnection() {
   RTC_DCHECK(!peer_connection_factory_);
@@ -313,15 +356,26 @@ void Conductor::OnIceCandidate(const webrtc::IceCandidateInterface* candidate) {
   Json::StreamWriterBuilder factory;
   std::string message = Json::writeString(factory, jmessage);
 
-  // Only send if peer is connected, otherwise queue
-  if (peer_connected_) {
-    ws_client_->SendMessage(*pending_messages_.front());
-    pending_messages_.pop_front();
+  // Send or queue the message
+  if (is_initiator_) {
+    // For initiator, send directly via HTTP
+    SendMessage(message);
   } else {
-    RTC_LOG(LS_INFO) << "Queuing ICE candidate until peer connects";
-    pending_messages_.push_back(new std::string(message));
+    // For non-initiator, use websocket
+    if (!ws_client_ || !ws_client_->IsConnected()) {
+      RTC_LOG(LS_INFO) << "WebSocket not connected, queuing ICE candidate";
+      pending_messages_.push_back(new std::string(message));  // Allocate new string
+    } else {
+      // Create WebSocket wrapper message
+      Json::Value wrapped_message;
+      wrapped_message["cmd"] = "send";
+      wrapped_message["msg"] = message;
+      std::string ws_message = Json::writeString(factory, wrapped_message);
+      ws_client_->SendMessage(ws_message);
+    }
   }
 }
+
 
 //
 // PeerConnectionClientObserver implementation.
@@ -537,41 +591,45 @@ void Conductor::StartLogin(const std::string& server, int port) {
   // Perform HTTP POST to /join/{room_id}
   std::string join_url = "https://" + server + "/join/" + room_id;
 
-  CURL* curl = curl_easy_init();
+  if (!InitializeCurl()) {
+    RTC_LOG(LS_ERROR) << "Failed to initialize CURL";
+    return;
+  }
+
   CURLcode res;
   std::string read_buffer;
 
-  if(curl) {
-    curl_easy_setopt(curl, CURLOPT_URL, join_url.c_str());
-    curl_easy_setopt(curl, CURLOPT_POST, 1L);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &read_buffer);
+  if(curl_) {
+    curl_easy_setopt(curl_, CURLOPT_URL, join_url.c_str());
+    curl_easy_setopt(curl_, CURLOPT_POST, 1L);
+    curl_easy_setopt(curl_, CURLOPT_WRITEFUNCTION, WriteCallback);
+    curl_easy_setopt(curl_, CURLOPT_WRITEDATA, &read_buffer);
 
     struct curl_slist *headers = nullptr;
     headers = curl_slist_append(headers, "Content-Type: application/json");
     headers = curl_slist_append(headers, "User-Agent: peerconnection-client/1.0");
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(curl_, CURLOPT_HTTPHEADER, headers);
 
     Json::Value join_payload;
     join_payload["room_id"] = room_id;
     Json::StreamWriterBuilder writer;
     std::string payload = Json::writeString(writer, join_payload);
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.c_str());
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, payload.length());
+    curl_easy_setopt(curl_, CURLOPT_POSTFIELDS, payload.c_str());
+    curl_easy_setopt(curl_, CURLOPT_POSTFIELDSIZE, payload.length());
 
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
-    curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+    curl_easy_setopt(curl_, CURLOPT_TIMEOUT, 10L);
+    curl_easy_setopt(curl_, CURLOPT_VERBOSE, 1L);
 
     RTC_LOG(LS_INFO) << "Server Response: " << read_buffer;
 
-    res = curl_easy_perform(curl);
+    res = curl_easy_perform(curl_);
     if(res != CURLE_OK) {
       RTC_LOG(LS_ERROR) << "curl_easy_perform() failed: " << curl_easy_strerror(res);
-      curl_easy_cleanup(curl);
+      curl_easy_cleanup(curl_);
       return;
     }
     curl_slist_free_all(headers);
-    curl_easy_cleanup(curl);
+    //curl_easy_cleanup(curl_);
   }
 
   /////
@@ -597,6 +655,8 @@ void Conductor::StartLogin(const std::string& server, int port) {
   std::string wss_url = params["wss_url"].asString();
   client_id_ = params["client_id"].asString();
   room_id_ = params["room_id"].asString();
+
+  post_url_ = "https://" + server + "/message/" + room_id_ + "/" + client_id_;
   
   // Store initial messages if any
   if (params.isMember("messages") && params["messages"].isArray()) {
@@ -852,7 +912,7 @@ void Conductor::OnSuccess(webrtc::SessionDescriptionInterface* desc) {
 
   Json::StreamWriterBuilder factory;
 
-  RTC_LOG(LS_INFO) << "OnSuccess msg";
+  RTC_LOG(LS_INFO) << "OnSuccess msg "<< jmessage;
 
   SendMessage(Json::writeString(factory, jmessage));
 }
@@ -867,18 +927,84 @@ void Conductor::SendMessage(const std::string& json_object) {
   main_wnd_->QueueUIThreadCallback(SEND_MESSAGE_TO_PEER, msg);
 }
 */
+// Modify SendMessage in conductor.cc:
 void Conductor::SendMessage(const std::string& json_object) {
-  if (!ws_client_ || !ws_client_->IsConnected()) {
-    RTC_LOG(LS_ERROR) << "WebSocket not connected";
-    return;
+  if (is_initiator_) {
+    // Use HTTP POST if initiator
+    if (!InitializeCurl()) {
+      RTC_LOG(LS_ERROR) << "Failed to initialize CURL for sending message";
+      return;
+    }
+
+    response_buffer_.clear();
+    struct curl_slist *headers = nullptr;
+    bool request_success = false;
+
+    do {
+        headers = curl_slist_append(nullptr, "Content-Type: application/json");
+        if (!headers) {
+            RTC_LOG(LS_ERROR) << "Failed to create headers";
+            break;
+        }
+        
+        // Set all CURL options
+        curl_easy_setopt(curl_, CURLOPT_URL, post_url_.c_str());
+        curl_easy_setopt(curl_, CURLOPT_POST, 1L);
+        curl_easy_setopt(curl_, CURLOPT_HTTPHEADER, headers);
+        curl_easy_setopt(curl_, CURLOPT_POSTFIELDS, json_object.c_str());
+        curl_easy_setopt(curl_, CURLOPT_POSTFIELDSIZE, json_object.length());
+        curl_easy_setopt(curl_, CURLOPT_WRITEFUNCTION, WriteCallback);
+        curl_easy_setopt(curl_, CURLOPT_WRITEDATA, &response_buffer_);
+        
+        // Important SSL settings
+        curl_easy_setopt(curl_, CURLOPT_SSL_VERIFYPEER, 0L);
+        curl_easy_setopt(curl_, CURLOPT_SSL_VERIFYHOST, 0L);
+        
+        // Connection settings
+        curl_easy_setopt(curl_, CURLOPT_TIMEOUT, 10L);
+        curl_easy_setopt(curl_, CURLOPT_CONNECTTIMEOUT, 10L);
+        curl_easy_setopt(curl_, CURLOPT_NOSIGNAL, 1L); // For multi-threaded apps
+
+        RTC_LOG(LS_INFO) << "POST " << post_url_ << " " << json_object;
+
+        CURLcode res = curl_easy_perform(curl_);
+        if (res != CURLE_OK) {
+            RTC_LOG(LS_ERROR) << "curl_easy_perform() failed: " << curl_easy_strerror(res);
+            break;
+        }
+
+        long response_code;
+        curl_easy_getinfo(curl_, CURLINFO_RESPONSE_CODE, &response_code);
+        if (response_code >= 200 && response_code < 300) {
+            request_success = true;
+        } else {
+            RTC_LOG(LS_ERROR) << "HTTP error: " << response_code;
+        }
+
+    } while (false);
+
+    if (headers) {
+        curl_slist_free_all(headers);
+    }
+
+    if (!request_success) {
+        RTC_LOG(LS_ERROR) << "Failed to send message";
+    }
+
+  } else {
+    // Use WebSocket if not initiator
+    if (!ws_client_ || !ws_client_->IsConnected()) {
+      RTC_LOG(LS_ERROR) << "WebSocket not connected";
+      return;
+    }
+
+    // Wrap the message in AppRTC format
+    Json::Value wrapped_message;
+    wrapped_message["cmd"] = "send";
+    wrapped_message["msg"] = json_object;
+
+    std::string message = rtc::JsonValueToString(wrapped_message);
+    RTC_LOG(LS_INFO) << "Sending WebSocket message: " << message;
+    ws_client_->SendMessage(message);
   }
-
-  // Wrap the message in AppRTC format
-  Json::Value wrapped_message;
-  wrapped_message["cmd"] = "send";
-  wrapped_message["msg"] = json_object;
-
-  std::string message = rtc::JsonValueToString(wrapped_message);
-  RTC_LOG(LS_INFO) << "Sending message: " << message;
-  ws_client_->SendMessage(message);
 }

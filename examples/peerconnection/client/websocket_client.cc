@@ -157,7 +157,6 @@ bool WebSocketClient::SendMessage(const std::string& message) {
 int WebSocketClient::CallbackFunction(struct lws *wsi,
                                     enum lws_callback_reasons reason,
                                     void *user, void *in, size_t len) {
-  RTC_LOG(LS_INFO) << "Callback reason: " << reason;
   
   // Get the WebSocketClient instance from user data
   WebSocketClient* client = static_cast<WebSocketClient*>(
@@ -176,8 +175,6 @@ int WebSocketClient::CallbackFunction(struct lws *wsi,
 void WebSocketClient::HandleCallback(struct lws *wsi,
                                    enum lws_callback_reasons reason,
                                    void *user, void *in, size_t len) {
-  
-  RTC_LOG(LS_INFO) << "Handling callback reason: " << reason << " (" << GetCallbackReasonName(reason) << ")";
                
   switch (reason) {
     case LWS_CALLBACK_CLIENT_ESTABLISHED:
@@ -211,12 +208,12 @@ void WebSocketClient::HandleCallback(struct lws *wsi,
       }
 
       // Check for error messages from server
-      if (json_message.isMember("error")) {
+      if (json_message.isMember("error") && !json_message["error"].asString().empty()) {
         RTC_LOG(LS_WARNING) << "Server error: " << json_message["error"].asString();
         return;
       }
 
-      // Only process messages that have valid content
+      // Proceed to process the message
       if (json_message.isMember("msg")) {
         std::string msg_data = json_message["msg"].asString();
         if (!msg_data.empty()) {
@@ -227,12 +224,14 @@ void WebSocketClient::HandleCallback(struct lws *wsi,
           RTC_LOG(LS_WARNING) << "Received empty message content";
         }
       }
-      break;
+  break;
     }
 
     case LWS_CALLBACK_CLIENT_WRITEABLE: {
       if (!send_queue_.empty()) {
         std::string& message = send_queue_.front();
+
+        RTC_LOG(LS_INFO) << "Writing message to WebSocket: " << message;
         
         // Add LWS_PRE bytes for libwebsockets header
         std::vector<unsigned char> buf(LWS_PRE + message.length());
@@ -259,14 +258,31 @@ void WebSocketClient::HandleCallback(struct lws *wsi,
       break;
     }
 
-    case LWS_CALLBACK_CLIENT_CLOSED:
+    case LWS_CALLBACK_CLIENT_CONNECTION_ERROR: {
+      const char* error_msg = in ? static_cast<const char*>(in) : "Unknown error";
+      RTC_LOG(LS_ERROR) << "Connection error: " << error_msg;
+      is_connected_ = false;
+      if (connection_callback_) {
+        connection_callback_(false);
+      }
+      break;
+    }
+
+    case LWS_CALLBACK_CLIENT_CLOSED: {
       RTC_LOG(LS_INFO) << "WebSocket connection closed";
+      // Log the close status if available
+      if (in && len >= 2) {
+        unsigned short close_code = static_cast<unsigned short>(
+            (((unsigned char*)in)[0] << 8) | ((unsigned char*)in)[1]);
+        RTC_LOG(LS_INFO) << "Close status code: " << close_code;
+      }
       is_connected_ = false;
       websocket_ = nullptr;
       if (connection_callback_) {
         connection_callback_(false);
       }
       break;
+    }
 
     case LWS_CALLBACK_WSI_DESTROY:
       RTC_LOG(LS_INFO) << "WebSocket instance destroyed";

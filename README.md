@@ -30,3 +30,48 @@ native API header files.
  * [Documentation](g3doc/sitemap.md)
 
 [native-dev]: https://webrtc.googlesource.com/src/+/main/docs/native-code/
+
+
+-----------------------------------------------------------------------------
+
+### (Our contribution) Testing Frameworks and Tools
+#### Automated WebRTC Testbed (Native C++)
+A complete testing framework for WebRTC applications built using native C++ code. This testbed enables:
+- Automated peer connection testing between multiple endpoints
+- Network condition simulation and testing
+- Performance benchmarking and metrics collection
+
+##### Building from Source
+```bash
+# Sync dependencies
+gclient sync
+
+# Generate build files
+gn gen out/Default
+
+# Build peer connection client
+ninja -C out/Default peerconnection_client
+```
+
+##### Running Tests
+```bash
+# Basic connection test
+./out/Default/peerconnection_client --server=your.server.com
+
+# Example outputs
+Server: your.server.com
+Room: test_room_1
+Peers: 2
+[INFO] Starting peer connection client...
+[INFO] Connected to signaling server
+[INFO] Joined room test_room_1
+[INFO] Establishing peer connection...
+[INFO] Connection established
+```
+
+##### Common Options
+- `--server`: Signaling server address (default: localhost)
+- `--port`: Server port (default: 8888)
+- `--name`: Client name (default: auto-generated)
+- `--room-id`: Room identifier (default: auto-generated)
+

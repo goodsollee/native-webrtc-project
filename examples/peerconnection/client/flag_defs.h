@@ -39,6 +39,11 @@ ABSL_FLAG(
     "the server without user intervention.  Note: this flag should only be set "
     "to true on one of the two clients.");
 
+ABSL_FLAG(std::string,
+          room_id,
+          "",  // default value
+          "The room ID to join on the server.");
+
 ABSL_FLAG(
     std::string,
     force_fieldtrials,

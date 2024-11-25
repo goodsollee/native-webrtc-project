@@ -585,11 +585,13 @@ void Conductor::StartLogin(const std::string& server, int port) {
   }
 
   // Generate or set room ID
-  std::string room_id = GenerateRandomString(8);  // You can generate a random ID if needed
-  RTC_LOG(LS_INFO) << "Room number is "<<room_id;
+  if (room_id_.empty()) {
+    room_id_ = GenerateRandomString(8);  // You can generate a random ID if needed
+    RTC_LOG(LS_INFO) << "Generated room number is "<<room_id_;
+  } 
 
   // Perform HTTP POST to /join/{room_id}
-  std::string join_url = "https://" + server + "/join/" + room_id;
+  std::string join_url = "https://" + server + "/join/" + room_id_;
 
   if (!InitializeCurl()) {
     RTC_LOG(LS_ERROR) << "Failed to initialize CURL";
@@ -611,7 +613,7 @@ void Conductor::StartLogin(const std::string& server, int port) {
     curl_easy_setopt(curl_, CURLOPT_HTTPHEADER, headers);
 
     Json::Value join_payload;
-    join_payload["room_id"] = room_id;
+    join_payload["room_id"] = room_id_;
     Json::StreamWriterBuilder writer;
     std::string payload = Json::writeString(writer, join_payload);
     curl_easy_setopt(curl_, CURLOPT_POSTFIELDS, payload.c_str());

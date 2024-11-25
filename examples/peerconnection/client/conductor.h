@@ -61,6 +61,8 @@ class Conductor : public webrtc::PeerConnectionObserver,
   
   void ServiceWebSocket();
 
+  void SetRoomId(const std::string& room_id) { room_id_ = room_id; }
+
  protected:
   ~Conductor();
   bool InitializePeerConnection();

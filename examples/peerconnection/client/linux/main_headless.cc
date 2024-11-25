@@ -16,7 +16,7 @@
 #include "api/scoped_refptr.h"
 #include "examples/peerconnection/client/conductor.h"
 #include "examples/peerconnection/client/flag_defs.h"
-#include "examples/peerconnection/client/linux/main_wnd.h"
+#include "examples/peerconnection/client/linux/headless_wnd.h"
 #include "examples/peerconnection/client/peer_connection_client.h"
 #include "rtc_base/physical_socket_server.h"
 #include "rtc_base/ssl_adapter.h"
@@ -26,7 +26,7 @@
 
 class CustomSocketServer : public rtc::PhysicalSocketServer {
  public:
-  explicit CustomSocketServer(GtkMainWnd* wnd)
+  explicit CustomSocketServer(HeadlessWnd* wnd)
       : wnd_(wnd), conductor_(NULL), client_(NULL) {}
   virtual ~CustomSocketServer() {}
 
@@ -35,93 +35,88 @@ class CustomSocketServer : public rtc::PhysicalSocketServer {
   void set_client(PeerConnectionClient* client) { client_ = client; }
   void set_conductor(Conductor* conductor) { conductor_ = conductor; }
 
-  // Override so that we can also pump the GTK message loop.
-  // This function never waits.
   bool Wait(webrtc::TimeDelta max_wait_duration, bool process_io) override {
-    // Pump GTK events.
-    // TODO(henrike): We really should move either the socket server or UI to a
-    // different thread.  Alternatively we could look at merging the two loops
-    // by implementing a dispatcher for the socket server and/or use
-    // g_main_context_set_poll_func.
-    while (gtk_events_pending())
-      gtk_main_iteration();
-
-    // Service WebSocket client.
+    // Service WebSocket client
     if (conductor_) {
       conductor_->ServiceWebSocket();
     }
 
-    if (!wnd_->IsWindow() && !conductor_->connection_active() &&
+    // Check for disconnection
+    if (!conductor_->connection_active() &&
         client_ != NULL && !client_->is_connected()) {
+      RTC_LOG(LS_INFO) << "Connection ended, quitting message loop";
       message_queue_->Quit();
     }
-    return rtc::PhysicalSocketServer::Wait(webrtc::TimeDelta::Zero(),
-                                           process_io);
+
+    // Process socket events with a small timeout
+    return rtc::PhysicalSocketServer::Wait(webrtc::TimeDelta::Millis(100), process_io);
   }
 
  protected:
   rtc::Thread* message_queue_;
-  GtkMainWnd* wnd_;
+  HeadlessWnd* wnd_;
   Conductor* conductor_;
   PeerConnectionClient* client_;
 };
 
-int main(int argc, char* argv[]) {
-  gtk_init(&argc, &argv);
-// g_type_init API is deprecated (and does nothing) since glib 2.35.0, see:
-// https://mail.gnome.org/archives/commits-list/2012-November/msg07809.html
-#if !GLIB_CHECK_VERSION(2, 35, 0)
-  g_type_init();
-#endif
-// g_thread_init API is deprecated since glib 2.31.0, see release note:
-// http://mail.gnome.org/archives/gnome-announce-list/2011-October/msg00041.html
-#if !GLIB_CHECK_VERSION(2, 31, 0)
-  g_thread_init(NULL);
-#endif
 
+int main(int argc, char* argv[]) {
+  RTC_LOG(LS_INFO) << "Initializing headless WebRTC client...";
+  
   absl::ParseCommandLine(argc, argv);
 
-  // InitFieldTrialsFromString stores the char*, so the char array must outlive
-  // the application.
-  const std::string forced_field_trials =
-      absl::GetFlag(FLAGS_force_fieldtrials);
+  // Initialize logging
+  rtc::LogMessage::LogToDebug(rtc::LS_INFO);
+  rtc::LogMessage::LogTimestamps();
+  rtc::LogMessage::LogThreads();
+
+  // Initialize field trials
+  const std::string forced_field_trials = absl::GetFlag(FLAGS_force_fieldtrials);
   webrtc::field_trial::InitFieldTrialsFromString(forced_field_trials.c_str());
 
-  // Abort if the user specifies a port that is outside the allowed
-  // range [1, 65535].
+  // Validate port
   if ((absl::GetFlag(FLAGS_port) < 1) || (absl::GetFlag(FLAGS_port) > 65535)) {
-    printf("Error: %i is not a valid port.\n", absl::GetFlag(FLAGS_port));
+    RTC_LOG(LS_ERROR) << "Error: " << absl::GetFlag(FLAGS_port) << " is not a valid port.";
     return -1;
   }
 
+  // Create headless window
   const std::string server = absl::GetFlag(FLAGS_server);
-  GtkMainWnd wnd(server.c_str(), absl::GetFlag(FLAGS_port),
-                 absl::GetFlag(FLAGS_autoconnect),
-                 absl::GetFlag(FLAGS_autocall));
-  wnd.Create();
+  RTC_LOG(LS_INFO) << "Connecting to server: " << server;
+  
+  HeadlessWnd wnd(server.c_str(), absl::GetFlag(FLAGS_port),
+                  true,  // autoconnect
+                  true); // autocall
+  
+  if (!wnd.Create()) {
+    RTC_LOG(LS_ERROR) << "Failed to create headless window";
+    return -1;
+  }
 
+  // Initialize socket server
   CustomSocketServer socket_server(&wnd);
   rtc::AutoSocketServerThread thread(&socket_server);
 
+  // Initialize SSL
   rtc::InitializeSSL();
-  // Must be constructed after we set the socketserver.
+  RTC_LOG(LS_INFO) << "SSL initialized";
+
+  // Create peer connection client and conductor
   PeerConnectionClient client;
   auto conductor = rtc::make_ref_counted<Conductor>(&client, &wnd);
-  conductor->SetRoomId(absl::GetFlag(FLAGS_room_id));
   socket_server.set_client(&client);
   socket_server.set_conductor(conductor.get());
 
+  RTC_LOG(LS_INFO) << "Starting message loop...";
+  
+  // Run the message loop
   thread.Run();
 
-  // gtk_main();
+  // Cleanup
+  RTC_LOG(LS_INFO) << "Cleaning up...";
   wnd.Destroy();
-
-  // TODO(henrike): Run the Gtk main loop to tear down the connection.
-  /*
-  while (gtk_events_pending()) {
-    gtk_main_iteration();
-  }
-  */
   rtc::CleanupSSL();
+  
+  RTC_LOG(LS_INFO) << "Client terminated normally";
   return 0;
 }

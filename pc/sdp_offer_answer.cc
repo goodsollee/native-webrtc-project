@@ -1558,6 +1558,7 @@ void SdpOfferAnswerHandler::CreateOffer(
   // Chain this operation. If asynchronous operations are pending on the chain,
   // this operation will be queued to be invoked, otherwise the contents of the
   // lambda will execute immediately.
+  RTC_LOG(LS_INFO) << "CreateOffer called with options: ";
   operations_chain_->ChainOperation(
       [this_weak_ptr = weak_ptr_factory_.GetWeakPtr(),
        observer_refptr =

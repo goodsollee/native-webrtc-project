@@ -46,16 +46,38 @@ class ConnectionManager:
                 cmd.append(f"--room_id={room_number}")
             
             logger.info(f"Starting client with command: {' '.join(cmd)}")
+            # Set working directory to where the executable is
+            executable_dir = os.path.dirname(os.path.abspath("../out/Default/"))
             
-            # Start the peerconnection_client with parameters
+            '''
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
+                stderr=subprocess.PIPE,
+                cwd=executable_dir,  # Set working directory
+                env=os.environ.copy()  # Pass current environment
             )
-            
-            self.active_connections[room_number] = process
-            logger.info(f"Started client for room {room_number}")
+            '''
+
+            # Add logging for debugging
+            '''
+            def log_output(pipe, prefix):
+                for line in iter(pipe.readline, b''):
+                    logger.info(f"{prefix}: {line.decode().strip()}")
+                    
+            import threading
+            #threading.Thread(target=log_output, args=(process.stdout, "STDOUT")).start()
+            threading.Thread(target=log_output, args=(process.stderr, "STDERR")).start()
+            '''
+
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.DEVNULL,  # Ignore stdout
+                stderr=subprocess.DEVNULL,  # Ignore stderr
+                cwd=executable_dir, 
+                env=os.environ.copy()
+            )
+    
             return True
             
         except Exception as e:

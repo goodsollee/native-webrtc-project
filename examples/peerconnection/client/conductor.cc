@@ -9,7 +9,6 @@
  */
 
 #include "examples/peerconnection/client/conductor.h"
-#include "examples/peerconnection/client/file_video_source.h"
 
 #include <stddef.h>
 
@@ -22,6 +21,8 @@
 #include "absl/memory/memory.h"
 #include "api/audio_codecs/builtin_audio_decoder_factory.h"
 #include "api/audio_codecs/builtin_audio_encoder_factory.h"
+#include "api/video_codecs/builtin_video_decoder_factory.h"
+#include "api/video_codecs/builtin_video_encoder_factory.h"
 #include "api/audio_options.h"
 #include "api/create_peerconnection_factory.h"
 #include "api/enable_media.h"
@@ -64,6 +65,7 @@
 #include "test/frame_generator_capturer.h"
 #include "test/platform_video_capturer.h"
 #include "test/test_video_capturer.h"
+#include "test/testsupport/y4m_frame_generator.h"
 
 #include <cstdlib>
 #include <ctime>
@@ -146,6 +148,19 @@ class CapturerTrackSource : public webrtc::VideoTrackSource {
 
 }  // namespace
 
+// y4m reader
+class Y4mVideoSource : public webrtc::VideoTrackSource {
+ public:
+  explicit Y4mVideoSource(std::unique_ptr<webrtc::test::FrameGeneratorCapturer> capturer)
+      : VideoTrackSource(/*remote=*/false), capturer_(std::move(capturer)) {}  // Changed Y4mVideoTrackSource to VideoTrackSource
+ protected:
+  rtc::VideoSourceInterface<webrtc::VideoFrame>* source() override {
+    return capturer_.get();
+  }
+ private:
+  std::unique_ptr<webrtc::test::FrameGeneratorCapturer> capturer_;
+};
+
 bool Conductor::curl_initialized_ = false;
 
 Conductor::Conductor(PeerConnectionClient* client, MainWindow* main_wnd)
@@ -222,18 +237,41 @@ bool Conductor::InitializePeerConnection() {
   deps.task_queue_factory = webrtc::CreateDefaultTaskQueueFactory(),
   deps.audio_encoder_factory = webrtc::CreateBuiltinAudioEncoderFactory();
   deps.audio_decoder_factory = webrtc::CreateBuiltinAudioDecoderFactory();
+
+  /*
+  // Create video encoder factory with H264 first (highest priority)
   deps.video_encoder_factory =
       std::make_unique<webrtc::VideoEncoderFactoryTemplate<
+          webrtc::OpenH264EncoderTemplateAdapter,  // H264 first
           webrtc::LibvpxVp8EncoderTemplateAdapter,
           webrtc::LibvpxVp9EncoderTemplateAdapter,
-          webrtc::OpenH264EncoderTemplateAdapter,
           webrtc::LibaomAv1EncoderTemplateAdapter>>();
+
+  // Create video decoder factory with H264 first
   deps.video_decoder_factory =
       std::make_unique<webrtc::VideoDecoderFactoryTemplate<
+          webrtc::OpenH264DecoderTemplateAdapter,  // H264 first
           webrtc::LibvpxVp8DecoderTemplateAdapter,
           webrtc::LibvpxVp9DecoderTemplateAdapter,
-          webrtc::OpenH264DecoderTemplateAdapter,
           webrtc::Dav1dDecoderTemplateAdapter>>();
+  */
+ // Create video encoder factory 
+  auto video_encoder_factory = webrtc::CreateBuiltinVideoEncoderFactory();
+  
+  // Log supported codecs by the factory
+  RTC_LOG(LS_INFO) << "Available video encoders:";
+  std::vector<webrtc::SdpVideoFormat> supported_formats = 
+      video_encoder_factory->GetSupportedFormats();
+  for (const auto& format : supported_formats) {
+    RTC_LOG(LS_INFO) << "  " << format.name;
+    for (const auto& param : format.parameters) {
+      RTC_LOG(LS_INFO) << "    " << param.first << ": " << param.second;
+    }
+  }
+
+  deps.video_encoder_factory = std::move(video_encoder_factory);
+  deps.video_decoder_factory = webrtc::CreateBuiltinVideoDecoderFactory();
+
   webrtc::EnableMedia(deps);
   task_queue_factory_ = deps.task_queue_factory.get();
   peer_connection_factory_ =
@@ -786,7 +824,7 @@ void Conductor::AddTracks() {
                       << result_or_error.error().message();
   }
 
-  /* Square video source for default test
+  /*
   rtc::scoped_refptr<CapturerTrackSource> video_device =
       CapturerTrackSource::Create(*task_queue_factory_);
   if (video_device) {
@@ -806,16 +844,33 @@ void Conductor::AddTracks() {
 
   // Create video source from file instead of camera
   auto frame_generator = std::make_unique<webrtc::test::Y4mFrameGenerator>(
-      "../../../dataset/forza_horizon5_4k.y4m",  // Y4M file path
+      "../../../dataset/forza/forza_horizon5_4k.y4m",  // Y4M file path
       webrtc::test::Y4mFrameGenerator::RepeatMode::kLoop  // Loop the video
   );
 
-  // Create video capturer using the frame generator
-  auto video_capturer = webrtc::test::FrameGeneratorCapturer::Create(
-      frame_generator->GetResolution().width,  // Width from Y4M
-      frame_generator->GetResolution().height, // Height from Y4M
-      frame_generator->fps().value_or(60),     // FPS from Y4M or default to 60
-      webrtc::Clock::GetRealTimeClock()
+  // Get the native resolution from the Y4M file
+  auto resolution = frame_generator->GetResolution();
+  RTC_LOG(LS_INFO) << "Y4M file native resolution: " << resolution.width 
+                   << "x" << resolution.height;
+
+  // Keep original resolution - don't force scaling
+  const int kTargetFps = frame_generator->fps().value_or(60);
+  RTC_LOG(LS_INFO) << "Y4M file native FPS: " << kTargetFps;
+
+  // Set high quality bitrate for 4K
+  webrtc::BitrateSettings bitrate_settings;
+  // For 4K video, use higher bitrates
+  bitrate_settings.min_bitrate_bps = 100000000;    // 8 Mbps min
+  bitrate_settings.start_bitrate_bps = 100000000;  // 15 Mbps start
+  bitrate_settings.max_bitrate_bps = 500000000;    // 40 Mbps max
+  peer_connection_->SetBitrate(bitrate_settings);
+
+  // No need to store resolution in a variable
+  auto video_capturer = std::make_unique<webrtc::test::FrameGeneratorCapturer>(
+      webrtc::Clock::GetRealTimeClock(),
+      std::move(frame_generator),
+      frame_generator->fps().value_or(60),  // Get FPS directly 
+      *task_queue_factory_
   );
 
   if (!video_capturer) {
@@ -823,18 +878,14 @@ void Conductor::AddTracks() {
     return;
   }
 
-  video_capturer->SetGenerator(std::move(frame_generator));
-  video_capturer->Start();  // Start the capturer
+  video_capturer->Start();
 
-  // Create video track source
-  rtc::scoped_refptr<webrtc::VideoTrackSourceInterface> video_source =
-      peer_connection_factory_->CreateVideoSource(
-          std::move(video_capturer), 
-          webrtc::VideoTrackSourceInterface::Options());
+  rtc::scoped_refptr<Y4mVideoSource> video_source = rtc::make_ref_counted<Y4mVideoSource>(
+      std::move(video_capturer));
 
-  // Create and add video track
+  // Create video track
   rtc::scoped_refptr<webrtc::VideoTrackInterface> video_track =
-      peer_connection_factory_->CreateVideoTrack(video_source, kVideoLabel);
+      peer_connection_factory_->CreateVideoTrack(kVideoLabel, video_source.get());
 
   main_wnd_->StartLocalRenderer(video_track.get());
 
@@ -842,6 +893,73 @@ void Conductor::AddTracks() {
   if (!result_or_error.ok()) {
     RTC_LOG(LS_ERROR) << "Failed to add video track to PeerConnection: "
                       << result_or_error.error().message();
+  }
+
+  // Configure RTP encoding parameters for high quality
+  auto senders = peer_connection_->GetSenders();
+  rtc::scoped_refptr<webrtc::RtpSenderInterface> sender;
+  for (const auto& s : senders) {
+    if (s->track() && s->track()->kind() == webrtc::MediaStreamTrackInterface::kVideoKind) {
+      sender = s;
+      break;
+    }
+  }
+
+  if (sender) {
+    webrtc::RtpParameters parameters = sender->GetParameters();
+    
+    // Log initial codecs
+    RTC_LOG(LS_INFO) << "Available codecs before setting parameters:";
+    for (const auto& codec : parameters.codecs) {
+      RTC_LOG(LS_INFO) << "Codec: " << codec.name 
+                       << " Payload: " << codec.payload_type;
+    }
+
+    // Configure H264 parameters
+    for (webrtc::RtpCodecParameters& codec : parameters.codecs) {
+      if (codec.name == "H264") {
+        // High profile, Level 5.1
+        codec.parameters["profile-level-id"] = "640033";
+        codec.parameters["packetization-mode"] = "1";
+        codec.parameters["level-asymmetry-allowed"] = "1";
+        // For 4K support
+        codec.parameters["max-mbps"] = "972000";
+        codec.parameters["max-fs"] = std::to_string((resolution.width * resolution.height) / 256);
+
+        RTC_LOG(LS_INFO) << "Configured H264 parameters:";
+        for (const auto& param : codec.parameters) {
+          RTC_LOG(LS_INFO) << "  " << param.first << ": " << param.second;
+        }
+      }
+    }
+
+    // Set high bitrate for encoding
+    parameters.encodings.clear();
+    webrtc::RtpEncodingParameters encoding;
+    encoding.active = true;
+    encoding.max_bitrate_bps = std::optional<int>(10000000);  // 40 Mbps for 4K
+    encoding.max_bitrate_bps = std::optional<int>(50000000);  // 40 Mbps for 4K
+    encoding.max_framerate = std::optional<int>(60);          // Up to 60fps
+    encoding.scale_resolution_down_by = std::optional<double>(1.0);  // No downscaling
+    parameters.encodings.push_back(encoding);
+
+    // Set the parameters
+    webrtc::RTCError error = sender->SetParameters(parameters);
+    if (!error.ok()) {
+      RTC_LOG(LS_ERROR) << "Failed to set parameters: " << error.message();
+    } else {
+      RTC_LOG(LS_INFO) << "Successfully set encoding parameters";
+    }
+
+    // Verify encoder configuration
+    auto final_params = sender->GetParameters();
+    RTC_LOG(LS_INFO) << "Final encoder configuration:";
+    for (const auto& codec : final_params.codecs) {
+      RTC_LOG(LS_INFO) << "Using codec: " << codec.name;
+      for (const auto& param : codec.parameters) {
+        RTC_LOG(LS_INFO) << "  " << param.first << " = " << param.second;
+      }
+    }
   }
 
   main_wnd_->SwitchToStreamingUI();

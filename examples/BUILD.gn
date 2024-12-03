@@ -742,6 +742,7 @@ if (is_linux || is_chromeos || is_win) {
       "../test:field_trial",
       "../test:frame_generator_capturer",
       "../test:platform_video_capturer",
+      "../test:test_support",
       "../test:rtp_test_utils",
       "../test:test_video_capturer",
       "//third_party/abseil-cpp/absl/memory",
@@ -767,6 +768,8 @@ if (is_linux || is_chromeos || is_win) {
         "peerconnection/client/linux/main_wnd.h",
         "peerconnection/client/websocket_client.cc",
         "peerconnection/client/websocket_client.h",
+        "peerconnection/client/file_video_source.cc",
+        "peerconnection/client/file_video_source.h",
       ]
       cflags = [ "-Wno-deprecated-declarations" ]
       libs = [
@@ -891,6 +894,8 @@ if (is_linux || is_chromeos || is_win) {
         "peerconnection/client/linux/headless_wnd.h",
         "peerconnection/client/websocket_client.cc",
         "peerconnection/client/websocket_client.h",
+        "peerconnection/client/file_video_source.cc",
+        "peerconnection/client/file_video_source.h",
       ]
       cflags = [ "-Wno-deprecated-declarations" ]
       libs = [

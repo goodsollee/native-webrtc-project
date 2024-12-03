@@ -9,6 +9,7 @@
  */
 
 #include "examples/peerconnection/client/conductor.h"
+#include "examples/peerconnection/client/file_video_source.h"
 
 #include <stddef.h>
 
@@ -785,6 +786,7 @@ void Conductor::AddTracks() {
                       << result_or_error.error().message();
   }
 
+  /* Square video source for default test
   rtc::scoped_refptr<CapturerTrackSource> video_device =
       CapturerTrackSource::Create(*task_queue_factory_);
   if (video_device) {
@@ -799,6 +801,47 @@ void Conductor::AddTracks() {
     }
   } else {
     RTC_LOG(LS_ERROR) << "OpenVideoCaptureDevice failed";
+  }
+  */
+
+  // Create video source from file instead of camera
+  auto frame_generator = std::make_unique<webrtc::test::Y4mFrameGenerator>(
+      "../../../dataset/forza_horizon5_4k.y4m",  // Y4M file path
+      webrtc::test::Y4mFrameGenerator::RepeatMode::kLoop  // Loop the video
+  );
+
+  // Create video capturer using the frame generator
+  auto video_capturer = webrtc::test::FrameGeneratorCapturer::Create(
+      frame_generator->GetResolution().width,  // Width from Y4M
+      frame_generator->GetResolution().height, // Height from Y4M
+      frame_generator->fps().value_or(60),     // FPS from Y4M or default to 60
+      webrtc::Clock::GetRealTimeClock()
+  );
+
+  if (!video_capturer) {
+    RTC_LOG(LS_ERROR) << "Failed to create video capturer";
+    return;
+  }
+
+  video_capturer->SetGenerator(std::move(frame_generator));
+  video_capturer->Start();  // Start the capturer
+
+  // Create video track source
+  rtc::scoped_refptr<webrtc::VideoTrackSourceInterface> video_source =
+      peer_connection_factory_->CreateVideoSource(
+          std::move(video_capturer), 
+          webrtc::VideoTrackSourceInterface::Options());
+
+  // Create and add video track
+  rtc::scoped_refptr<webrtc::VideoTrackInterface> video_track =
+      peer_connection_factory_->CreateVideoTrack(video_source, kVideoLabel);
+
+  main_wnd_->StartLocalRenderer(video_track.get());
+
+  result_or_error = peer_connection_->AddTrack(video_track, {kStreamId});
+  if (!result_or_error.ok()) {
+    RTC_LOG(LS_ERROR) << "Failed to add video track to PeerConnection: "
+                      << result_or_error.error().message();
   }
 
   main_wnd_->SwitchToStreamingUI();

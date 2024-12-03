@@ -54,12 +54,17 @@ class WebSocketClient {
   ConnectionCallback connection_callback_;
   std::deque<std::string> send_queue_;  // Queue for outgoing messages
 
+  std::string message_buffer_;  // Buffer for accumulating partial messages
+  bool receiving_message_ = false;
+
   std::string protocol_;
   std::string host_;
   int port_;
   std::string path_;
   std::string origin_;
 
+  // Helper method to process complete messages
+  bool ProcessCompleteMessage(const std::string& complete_message);
 };
 
 #endif  // WEBSOCKET_CLIENT_H_

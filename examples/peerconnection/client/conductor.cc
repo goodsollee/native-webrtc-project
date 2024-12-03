@@ -301,7 +301,7 @@ bool Conductor::ReinitializePeerConnectionForLoopback() {
   peer_connection_ = nullptr;
   // Loopback is only possible if encryption is disabled.
   webrtc::PeerConnectionFactoryInterface::Options options;
-  options.disable_encryption = true;
+  options.disable_encryption = false;
   peer_connection_factory_->SetOptions(options);
   if (CreatePeerConnection()) {
     for (const auto& sender : senders) {
@@ -320,10 +320,48 @@ bool Conductor::CreatePeerConnection() {
   RTC_DCHECK(!peer_connection_);
 
   webrtc::PeerConnectionInterface::RTCConfiguration config;
+
+  // 1. Limit ICE candidates
+  config.candidate_network_policy = 
+      webrtc::PeerConnectionInterface::CandidateNetworkPolicy::kCandidateNetworkPolicyLowCost;
+  
+  // 2. Set ICE transport type
+  config.type = webrtc::PeerConnectionInterface::IceTransportsType::kAll;
+  
+  // 3. Prioritize UDP
+  config.tcp_candidate_policy = 
+      webrtc::PeerConnectionInterface::kTcpCandidatePolicyEnabled;
+
+
   config.sdp_semantics = webrtc::SdpSemantics::kUnifiedPlan;
   webrtc::PeerConnectionInterface::IceServer server;
   server.uri = GetPeerConnectionString();
   config.servers.push_back(server);
+
+  // Add Google STUN server as backup
+  webrtc::PeerConnectionInterface::IceServer stun_server;
+  stun_server.uri = "stun:stun.l.google.com:19302";
+  config.servers.push_back(stun_server);
+
+  // Basic configuration for WebRTC
+  config.sdp_semantics = webrtc::SdpSemantics::kUnifiedPlan;
+  config.bundle_policy = webrtc::PeerConnectionInterface::kBundlePolicyMaxBundle;
+  config.rtcp_mux_policy = webrtc::PeerConnectionInterface::kRtcpMuxPolicyRequire;
+
+  // Setup proper ICE connection timeouts
+  config.ice_connection_receiving_timeout = 5000;  // 5 seconds
+  config.ice_backup_candidate_pair_ping_interval = 5000; // 5 seconds
+  config.ice_check_min_interval = std::optional<int>(500); // 500ms minimum between checks
+  config.continual_gathering_policy = 
+      webrtc::PeerConnectionInterface::GATHER_CONTINUALLY;
+
+  // Generate and add certificates
+  rtc::scoped_refptr<rtc::RTCCertificate> certificate = 
+      rtc::RTCCertificateGenerator::GenerateCertificate(
+          rtc::KeyParams(rtc::KT_DEFAULT), std::nullopt);
+  if (certificate) {
+    config.certificates.push_back(certificate);
+  }
 
   webrtc::PeerConnectionDependencies pc_dependencies(this);
   auto error_or_peer_connection =
@@ -395,7 +433,14 @@ void Conductor::OnIceCandidate(const webrtc::IceCandidateInterface* candidate) {
   Json::StreamWriterBuilder factory;
   std::string message = Json::writeString(factory, jmessage);
 
+  //Json::StyledWriter writer;
+
+  //std::string* msg = new std::string(writer.write(jmessage));
+  //main_wnd_->QueueUIThreadCallback(SEND_MESSAGE_TO_PEER, msg);
+
   // Send or queue the message
+  //SendMessage(message);
+  
   if (is_initiator_) {
     // For initiator, send directly via HTTP
     SendMessage(message);
@@ -413,6 +458,7 @@ void Conductor::OnIceCandidate(const webrtc::IceCandidateInterface* candidate) {
       ws_client_->SendMessage(ws_message);
     }
   }
+  
 }
 
 
@@ -520,11 +566,21 @@ void Conductor::OnMessageFromPeer(int peer_id, const std::string& message) {
     RTC_LOG (LS_INFO) << "Set remote description";
     peer_connected_ = true;
 
+
     // Now we can send any pending ICE candidates
     while (!pending_messages_.empty()) {
         ws_client_->SendMessage(*pending_messages_.front());
         pending_messages_.pop_front();
     }
+    /*    
+    while (!pending_messages_.empty()) {
+        auto& message = pending_messages_.front();  // Get the front message
+        if (message) {
+            SendMessage(*message);  // Use SendMessage to send the message
+        }
+        pending_messages_.pop_front();  // Remove the sent message from the queue
+    }
+    */
 
     return;
   }
@@ -711,7 +767,7 @@ void Conductor::StartLogin(const std::string& server, int port) {
   ws_client_->SetConnectionCallback(
       std::bind(&Conductor::OnWebSocketConnection, this, std::placeholders::_1));
 
-  RTC_LOG(LS_INFO) << "Connecting to WebSocket server: " << wss_url;
+  RTC_LOG(LS_INFO) << "Connecting to WebSocket server: " << wss_url << " is_initiator: " << is_initiator_;
   ws_client_->Connect(wss_url);
 }
 
@@ -863,7 +919,7 @@ void Conductor::AddTracks() {
   bitrate_settings.min_bitrate_bps = 100000000;    // 8 Mbps min
   bitrate_settings.start_bitrate_bps = 100000000;  // 15 Mbps start
   bitrate_settings.max_bitrate_bps = 500000000;    // 40 Mbps max
-  peer_connection_->SetBitrate(bitrate_settings);
+  //peer_connection_->SetBitrate(bitrate_settings);
 
   // No need to store resolution in a variable
   auto video_capturer = std::make_unique<webrtc::test::FrameGeneratorCapturer>(
@@ -1092,7 +1148,8 @@ void Conductor::SendMessage(const std::string& json_object) {
 */
 // Modify SendMessage in conductor.cc:
 void Conductor::SendMessage(const std::string& json_object) {
-  if (is_initiator_) {
+  int a = 1;
+  if (a) {
     // Use HTTP POST if initiator
     if (!InitializeCurl()) {
       RTC_LOG(LS_ERROR) << "Failed to initialize CURL for sending message";

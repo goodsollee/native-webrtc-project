@@ -130,27 +130,63 @@ void WebSocketClient::Close() {
   is_connected_ = false;
 }
 
-bool WebSocketClient::SendMessage(const std::string& message) {
-  RTC_LOG(LS_INFO) << "Queuing message for sending: " << message;
-  
-  if (!is_connected_) {
-    RTC_LOG(LS_ERROR) << "Cannot send message - not connected";
+bool WebSocketClient::ProcessCompleteMessage(const std::string& complete_message) {
+    Json::CharReaderBuilder reader;
+    Json::Value json_message;
+    std::string parse_errors;
+    std::istringstream message_stream(complete_message);
+
+    if (!Json::parseFromStream(reader, message_stream, &json_message, &parse_errors)) {
+        RTC_LOG(LS_WARNING) << "Failed to parse complete message as JSON: " << parse_errors;
+        return false;
+    }
+
+    if (json_message.isMember("error") && !json_message["error"].asString().empty()) {
+        RTC_LOG(LS_WARNING) << "Server error in message: " << json_message["error"].asString();
+        return false;
+    }
+
+    if (json_message.isMember("msg")) {
+        const std::string& msg_data = json_message["msg"].asString();
+        if (!msg_data.empty() && message_callback_) {
+            message_callback_(msg_data);
+            return true;
+        }
+    }
+    
     return false;
+}
+
+// Update the SendMessage method for better fragmentation handling:
+bool WebSocketClient::SendMessage(const std::string& message) {
+  if (!is_connected_) {
+      RTC_LOG(LS_ERROR) << "Cannot send message - not connected";
+      return false;
   }
 
-  send_queue_.push_back(message);
+  // Calculate maximum fragment size (considering LWS_PRE)
+  const size_t max_fragment_size = 4096 - LWS_PRE;
   
-  if (websocket_) {
-    RTC_LOG(LS_INFO) << "Requesting writable callback";
-    int result = lws_callback_on_writable(websocket_);
-    RTC_LOG(LS_INFO) << "lws_callback_on_writable result: " << result;
-    
-    // Also trigger service to process the callback request
-    if (context_) {
-      lws_service(context_, 0);
-    }
+  // Split message if it's too large
+  for (size_t offset = 0; offset < message.length(); offset += max_fragment_size) {
+      size_t fragment_len = std::min(max_fragment_size, message.length() - offset);
+      std::string fragment = message.substr(offset, fragment_len);
+      send_queue_.push_back(fragment);
   }
-  
+
+  if (websocket_) {
+      RTC_LOG(LS_INFO) << "Requesting writable callback for " << send_queue_.size() << " fragments";
+      int result = lws_callback_on_writable(websocket_);
+      if (result < 0) {
+          RTC_LOG(LS_ERROR) << "Failed to request writable callback";
+          return false;
+      }
+      
+      if (context_) {
+          lws_service(context_, 0);
+      }
+  }
+
   return true;
 }
 
@@ -189,42 +225,53 @@ void WebSocketClient::HandleCallback(struct lws *wsi,
       }
       break;
 
+    // Replace the LWS_CALLBACK_CLIENT_RECEIVE case in HandleCallback with:
     case LWS_CALLBACK_CLIENT_RECEIVE: {
-      if (!in || len == 0) break;
-
-      // Copy the message data
-      std::string payload(static_cast<const char*>(in), len);
-      RTC_LOG(LS_INFO) << "WebSocket received raw data: " << payload;
-
-      // Parse the received JSON
-      Json::CharReaderBuilder reader;
-      Json::Value json_message;
-      std::string parse_errors;
-      std::istringstream message_stream(payload);
-      
-      if (!Json::parseFromStream(reader, message_stream, &json_message, &parse_errors)) {
-        RTC_LOG(LS_WARNING) << "Failed to parse WebSocket message: " << parse_errors;
-        return;
-      }
-
-      // Check for error messages from server
-      if (json_message.isMember("error") && !json_message["error"].asString().empty()) {
-        RTC_LOG(LS_WARNING) << "Server error: " << json_message["error"].asString();
-        return;
-      }
-
-      // Proceed to process the message
-      if (json_message.isMember("msg")) {
-        std::string msg_data = json_message["msg"].asString();
-        if (!msg_data.empty()) {
-          if (message_callback_) {
-            message_callback_(msg_data);
-          }
-        } else {
-          RTC_LOG(LS_WARNING) << "Received empty message content";
+        if (!in || len == 0) {
+            RTC_LOG(LS_WARNING) << "Received empty payload";
+            break;
         }
-      }
-  break;
+
+        // Get remaining bytes for this frame
+        bool is_final_fragment = lws_is_final_fragment(wsi);
+        //bool is_start_fragment = lws_is_first_fragment(wsi);
+        
+        // Append this fragment to our buffer
+        const char* payload = static_cast<const char*>(in);
+        if (!payload) {
+            RTC_LOG(LS_ERROR) << "Invalid payload pointer";
+            break;
+        }
+
+        // Safety check for buffer size
+        if (message_buffer_.length() + len > 1024 * 1024) { // 1MB limit
+            RTC_LOG(LS_ERROR) << "Message too large, clearing buffer";
+            message_buffer_.clear();
+            receiving_message_ = false;
+            break;
+        }
+
+        message_buffer_.append(payload, len);
+
+        if (!is_final_fragment) {
+            RTC_LOG(LS_INFO) << "Received partial WebSocket message, buffering...";
+            receiving_message_ = true;
+            break;
+        }
+
+        // If we've received all fragments, process the complete message
+        if (is_final_fragment) {
+            RTC_LOG(LS_INFO) << "Received final WebSocket fragment";
+            
+            std::string complete_message = message_buffer_;
+            message_buffer_.clear();
+            receiving_message_ = false;
+
+            if (!ProcessCompleteMessage(complete_message)) {
+                RTC_LOG(LS_WARNING) << "Failed to process complete message";
+            }
+        }
+        break;
     }
 
     case LWS_CALLBACK_CLIENT_WRITEABLE: {

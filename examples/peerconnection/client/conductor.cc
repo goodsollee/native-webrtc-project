@@ -383,11 +383,16 @@ void Conductor::DeletePeerConnection() {
 }
 
 void Conductor::EnsureStreamingUI() {
-  RTC_DCHECK(peer_connection_);
-  if (main_wnd_->IsWindow()) {
-    if (main_wnd_->current_ui() != MainWindow::STREAMING)
-      main_wnd_->SwitchToStreamingUI();
-  }
+    RTC_DCHECK(peer_connection_);
+    RTC_LOG(LS_INFO) << "EnsureStreamingUI called, current UI: " 
+                     << main_wnd_->current_ui();
+    
+    if (main_wnd_->IsWindow()) {
+        if (main_wnd_->current_ui() != MainWindow::STREAMING) {
+            RTC_LOG(LS_INFO) << "Switching to streaming UI";
+            main_wnd_->SwitchToStreamingUI();
+        }
+    }
 }
 
 //
@@ -432,14 +437,6 @@ void Conductor::OnIceCandidate(const webrtc::IceCandidateInterface* candidate) {
 
   Json::StreamWriterBuilder factory;
   std::string message = Json::writeString(factory, jmessage);
-
-  //Json::StyledWriter writer;
-
-  //std::string* msg = new std::string(writer.write(jmessage));
-  //main_wnd_->QueueUIThreadCallback(SEND_MESSAGE_TO_PEER, msg);
-
-  // Send or queue the message
-  //SendMessage(message);
   
   if (is_initiator_) {
     // For initiator, send directly via HTTP
@@ -562,6 +559,9 @@ void Conductor::OnMessageFromPeer(int peer_id, const std::string& message) {
       peer_connection_->CreateAnswer(
           this, webrtc::PeerConnectionInterface::RTCOfferAnswerOptions());
     }
+
+    // Add this call:
+    EnsureStreamingUI();
 
     RTC_LOG (LS_INFO) << "Set remote description";
     peer_connected_ = true;
@@ -900,7 +900,7 @@ void Conductor::AddTracks() {
 
   // Create video source from file instead of camera
   auto frame_generator = std::make_unique<webrtc::test::Y4mFrameGenerator>(
-      "../../../dataset/forza/forza_horizon5_4k.y4m",  // Y4M file path
+      "../../../dataset/forza/forza_horizon5_1080p.y4m",  // Y4M file path
       webrtc::test::Y4mFrameGenerator::RepeatMode::kLoop  // Loop the video
   );
 

@@ -24,6 +24,8 @@
 #include "examples/peerconnection/client/main_wnd.h"
 #include "examples/peerconnection/client/peer_connection_client.h"
 #include "rtc_base/buffer.h"
+#include <glib.h> // Add this for gboolean and gpointer
+#include <gtk/gtk.h> // Add this for GTK types
 
 // Forward declarations.
 typedef struct _GtkWidget GtkWidget;
@@ -33,6 +35,8 @@ typedef struct _GtkTreeView GtkTreeView;
 typedef struct _GtkTreePath GtkTreePath;
 typedef struct _GtkTreeViewColumn GtkTreeViewColumn;
 typedef struct _cairo cairo_t;
+
+typedef struct _GdkEventConfigure GdkEventConfigure;
 
 // Implements the main UI of the peer connection client.
 // This is functionally equivalent to the MainWnd class in the Windows
@@ -82,6 +86,19 @@ class GtkMainWnd : public MainWindow {
 
   void Draw(GtkWidget* widget, cairo_t* cr);
 
+  // Display size reconfiguration
+  int desired_width_;  // Desired window width 
+  int desired_height_; // Desired window height
+  double scale_; // Current scale factor
+  bool window_resizing_; // Flag to prevent recursive resize
+
+  // Add with other static callbacks at the top of the class
+  static gboolean OnConfigureCallback(GtkWidget* widget, 
+                                  GdkEventConfigure* event,
+                                  gpointer data);
+  void OnConfigure(GtkWidget* widget, GdkEventConfigure* event);
+  void ResizeWindow (int width, int height);
+
  protected:
   class VideoRenderer : public rtc::VideoSinkInterface<webrtc::VideoFrame> {
    public:
@@ -98,6 +115,10 @@ class GtkMainWnd : public MainWindow {
 
     int height() const { return height_; }
 
+    float fps() const { return current_fps_; }
+
+    float bitrate() const { return current_bitrate_; } 
+
    protected:
     void SetSize(int width, int height);
     rtc::Buffer image_;
@@ -105,6 +126,15 @@ class GtkMainWnd : public MainWindow {
     int height_;
     GtkMainWnd* main_wnd_;
     rtc::scoped_refptr<webrtc::VideoTrackInterface> rendered_track_;
+
+    int64_t last_frame_time_;
+    float current_fps_;
+    int frame_count_;
+
+    // For bitrate calculation
+    size_t total_bytes_ = 0;
+    float current_bitrate_ = 0.0f;  // in kbps
+    int64_t bitrate_time_ = 0;
   };
 
  protected:

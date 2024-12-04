@@ -237,6 +237,14 @@ bool GtkMainWnd::Create() {
                      G_CALLBACK(&OnDestroyedCallback), this);
     g_signal_connect(window_, "key-press-event", G_CALLBACK(OnKeyPressCallback),
                      this);
+    g_signal_connect(G_OBJECT(window_), "configure-event",
+                   G_CALLBACK(&OnConfigureCallback), this);
+
+    // Initialize default size
+    desired_width_ = 640;
+    desired_height_ = 480;
+    scale_ = 1.0;
+    window_resizing_ = false;
 
     SwitchToConnectUI();
   }
@@ -340,17 +348,39 @@ void GtkMainWnd::SwitchToPeerList(const Peers& peers) {
 }
 
 void GtkMainWnd::SwitchToStreamingUI() {
-  RTC_LOG(LS_INFO) << __FUNCTION__;
+  RTC_LOG(LS_INFO) << "SwitchToStreamingUI: Current UI state=" << current_ui()
+                   << ", draw_area_=" << (draw_area_ ? "exists" : "null");
 
-  RTC_DCHECK(draw_area_ == NULL);
-
-  gtk_container_set_border_width(GTK_CONTAINER(window_), 0);
+  // First clean up any existing UI elements
+  if (vbox_) {
+    gtk_container_remove(GTK_CONTAINER(window_), vbox_);
+    gtk_widget_destroy(vbox_);
+    vbox_ = NULL;
+    server_edit_ = NULL; 
+    port_edit_ = NULL;
+  }
+  
+  if (draw_area_) {
+    gtk_widget_destroy(draw_area_);
+    draw_area_ = NULL;
+  }
+  
   if (peer_list_) {
+    gtk_container_remove(GTK_CONTAINER(window_), peer_list_);
     gtk_widget_destroy(peer_list_);
     peer_list_ = NULL;
   }
 
+  gtk_container_set_border_width(GTK_CONTAINER(window_), 0);
+
+  // Set fixed window size
+  desired_width_ = 1280;  // Set your desired fixed width
+  desired_height_ = 720; // Set your desired fixed height
+  gtk_window_set_resizable(GTK_WINDOW(window_), FALSE); // Prevent resizing
+
   draw_area_ = gtk_drawing_area_new();
+  // Set the drawing area to maintain fixed size
+  gtk_widget_set_size_request(draw_area_, desired_width_, desired_height_);
   gtk_container_add(GTK_CONTAINER(window_), draw_area_);
   g_signal_connect(G_OBJECT(draw_area_), "draw", G_CALLBACK(&::Draw), this);
 
@@ -444,14 +474,100 @@ void GtkMainWnd::OnRedraw() {
 }
 
 void GtkMainWnd::Draw(GtkWidget* widget, cairo_t* cr) {
+  if (!draw_buffer_.data())
+    return;
+
+  // Draw video content first
+  double scale_x = static_cast<double>(desired_width_) / width_;
+  double scale_y = static_cast<double>(desired_height_) / height_;
+  double scale = std::min(scale_x, scale_y);
+  
+  double x = (desired_width_ - (width_ * scale)) / 2;
+  double y = (desired_height_ - (height_ * scale)) / 2;
+
+  cairo_translate(cr, x, y);
+  cairo_scale(cr, scale, scale);
+  
   cairo_format_t format = CAIRO_FORMAT_ARGB32;
   cairo_surface_t* surface = cairo_image_surface_create_for_data(
       draw_buffer_.data(), format, width_, height_,
       cairo_format_stride_for_width(format, width_));
+      
   cairo_set_source_surface(cr, surface, 0, 0);
+  cairo_pattern_set_filter(cairo_get_source(cr), CAIRO_FILTER_BILINEAR);
   cairo_rectangle(cr, 0, 0, width_, height_);
   cairo_fill(cr);
+  
   cairo_surface_destroy(surface);
+
+  // Reset transform for text overlay
+  cairo_identity_matrix(cr);
+
+  // Draw stats overlay
+  cairo_select_font_face(cr, "monospace", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
+  cairo_set_font_size(cr, 14.0);
+  cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);  // White text
+
+  float fps = remote_renderer_ ? remote_renderer_->fps() : 0.0f;
+  float bitrate = remote_renderer_ ? remote_renderer_->bitrate() : 0.0f;
+
+  char stats_text[128];
+  snprintf(stats_text, sizeof(stats_text), 
+           "Resolution: %dx%d  FPS: %.1f  Bitrate: %.1f kbps", 
+           width_, height_, fps, bitrate);
+  
+  // Add black background for better readability
+  cairo_text_extents_t extents;
+  cairo_text_extents(cr, stats_text, &extents);
+  
+  cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, 0.5);  // Semi-transparent black
+  cairo_rectangle(cr, 8, 8, extents.width + 4, extents.height + 4);
+  cairo_fill(cr);
+
+  // Draw text
+  cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
+  cairo_move_to(cr, 10, 20);
+  cairo_show_text(cr, stats_text);
+}
+
+// In the anonymous namespace where other callbacks are defined
+gboolean GtkMainWnd::OnConfigureCallback(GtkWidget* widget,
+                            GdkEventConfigure* event,
+                            gpointer data) {
+  reinterpret_cast<GtkMainWnd*>(data)->OnConfigure(widget, event);
+  return FALSE;
+}
+
+void GtkMainWnd::OnConfigure(GtkWidget* widget, GdkEventConfigure* event) {
+  if (!window_resizing_) {
+    ResizeWindow(event->width, event->height);
+  }
+}
+
+void GtkMainWnd::ResizeWindow(int width, int height) {
+  if (window_resizing_)
+    return;
+    
+  window_resizing_ = true;
+  
+  // Calculate scale to fit video in window while maintaining aspect ratio
+  double video_aspect = static_cast<double>(width_) / height_;
+  double window_aspect = static_cast<double>(width) / height;
+  
+  if (video_aspect > window_aspect) {
+    // Video is wider than window - scale to fit width
+    scale_ = static_cast<double>(width) / width_;
+    desired_width_ = width;
+    desired_height_ = height_ * scale_;
+  } else {
+    // Video is taller than window - scale to fit height 
+    scale_ = static_cast<double>(height) / height_;
+    desired_height_ = height;
+    desired_width_ = width_ * scale_;
+  }
+  
+  //gtk_window_resize(GTK_WINDOW(window_), desired_width_, desired_height_);
+  window_resizing_ = false;
 }
 
 GtkMainWnd::VideoRenderer::VideoRenderer(
@@ -485,26 +601,51 @@ void GtkMainWnd::VideoRenderer::SetSize(int width, int height) {
 void GtkMainWnd::VideoRenderer::OnFrame(const webrtc::VideoFrame& video_frame) {
   gdk_threads_enter();
 
+  int64_t current_time = rtc::TimeMillis();
+
+  // FPS Calculation
+  if (last_frame_time_ == 0) {
+    last_frame_time_ = current_time;
+    bitrate_time_ = current_time;
+  }
+  
+  frame_count_++;
+
+  // Calculate bitrate
+  size_t frame_size = video_frame.size(); // Get frame size in bytes
+  total_bytes_ += frame_size;
+
+  // Update FPS and bitrate every second
+  if (current_time - last_frame_time_ >= 1000) {
+    // FPS calculation
+    current_fps_ = frame_count_ * 1000.0f / (current_time - last_frame_time_);
+    
+    // Bitrate calculation (bits per second)
+    current_bitrate_ = (total_bytes_ * 8.0f / 1024) * (1000.0f / (current_time - last_frame_time_));
+    
+    // Reset counters
+    frame_count_ = 0;
+    total_bytes_ = 0;
+    last_frame_time_ = current_time;
+  }
+
   rtc::scoped_refptr<webrtc::I420BufferInterface> buffer(
       video_frame.video_frame_buffer()->ToI420());
   if (video_frame.rotation() != webrtc::kVideoRotation_0) {
     buffer = webrtc::I420Buffer::Rotate(*buffer, video_frame.rotation());
   }
+
+  // Keep original video dimensions
   SetSize(buffer->width(), buffer->height());
 
-  // TODO(bugs.webrtc.org/6857): This conversion is correct for little-endian
-  // only. Cairo ARGB32 treats pixels as 32-bit values in *native* byte order,
-  // with B in the least significant byte of the 32-bit value. Which on
-  // little-endian means that memory layout is BGRA, with the B byte stored at
-  // lowest address. Libyuv's ARGB format (surprisingly?) uses the same
-  // little-endian format, with B in the first byte in memory, regardless of
-  // native endianness.
-  libyuv::I420ToARGB(buffer->DataY(), buffer->StrideY(), buffer->DataU(),
-                     buffer->StrideU(), buffer->DataV(), buffer->StrideV(),
-                     image_.data(), width_ * 4, buffer->width(),
-                     buffer->height());
+  libyuv::I420ToARGB(buffer->DataY(), buffer->StrideY(),
+                     buffer->DataU(), buffer->StrideU(), 
+                     buffer->DataV(), buffer->StrideV(),
+                     image_.data(), width_ * 4,
+                     buffer->width(), buffer->height());
 
   gdk_threads_leave();
 
+  // This will trigger a redraw with the current scale
   g_idle_add(Redraw, main_wnd_);
 }

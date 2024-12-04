@@ -24,6 +24,16 @@
 #include "system_wrappers/include/field_trial.h"
 #include "test/field_trial.h"
 
+#include "absl/flags/flag.h"
+
+
+ABSL_FLAG(std::string, experiment_mode, "real", 
+    "Experiment mode: 'real' for real-world or 'emulation' for network emulation");
+ABSL_FLAG(bool, is_sender, true, 
+    "Whether this peer is sender (true) or receiver (false)");
+ABSL_FLAG(std::string, network_interface, "",
+    "Network interface to use (empty for default)");
+
 class CustomSocketServer : public rtc::PhysicalSocketServer {
  public:
   explicit CustomSocketServer(GtkMainWnd* wnd)
@@ -108,6 +118,23 @@ int main(int argc, char* argv[]) {
   PeerConnectionClient client;
   auto conductor = rtc::make_ref_counted<Conductor>(&client, &wnd);
   conductor->SetRoomId(absl::GetFlag(FLAGS_room_id));
+
+  // Experimental settings
+  std::string experiment_mode = absl::GetFlag(FLAGS_experiment_mode);
+  bool is_emulation = (experiment_mode == "emulation");
+  bool is_sender = absl::GetFlag(FLAGS_is_sender);
+
+  conductor->SetEmulationMode(is_emulation, is_sender);
+
+  if (is_emulation) {
+    std::string interface_name = absl::GetFlag(FLAGS_network_interface);
+    if (interface_name.empty()) {
+      RTC_LOG(LS_ERROR) << "Network profile and interface required for emulation mode";
+      return -1;
+    }
+    conductor->SetNetInterface(interface_name);
+  }
+
   socket_server.set_client(&client);
   socket_server.set_conductor(conductor.get());
 

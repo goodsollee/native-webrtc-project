@@ -1033,9 +1033,18 @@ void Conductor::DisconnectFromCurrentPeer() {
 }
 
 void Conductor::ServiceWebSocket() {
-    if (ws_client_) {
-        ws_client_->Service();
-    }
+  if (ws_client_) {
+    ws_client_->Service();
+  }
+}
+
+void Conductor::SetEmulationMode(bool is_emulation, bool is_sender) {
+  is_emulation_ = is_emulation;
+  is_sender_ = is_sender;
+}
+
+void Conductor::SetNetInterface(std::string interface_name) {
+  net_interface_ = interface_name;
 }
 
 void Conductor::UIThreadCallback(int msg_id, void* data) {

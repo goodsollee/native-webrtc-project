@@ -63,6 +63,10 @@ class Conductor : public webrtc::PeerConnectionObserver,
 
   void SetRoomId(const std::string& room_id) { room_id_ = room_id; }
 
+  void SetEmulationMode(bool is_emulation, bool is_sender);
+
+  void SetNetInterface(std::string interface_name);
+
  protected:
   ~Conductor();
   bool InitializePeerConnection();
@@ -169,6 +173,10 @@ class Conductor : public webrtc::PeerConnectionObserver,
   bool InitializeCurl();
   void CleanupCurl();
   std::string response_buffer_;
+
+  std::string net_interface_;
+  bool is_emulation_ = false;
+  bool is_sender_ = true;
   
 };
 

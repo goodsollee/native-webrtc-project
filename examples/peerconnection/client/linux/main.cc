@@ -33,6 +33,9 @@ ABSL_FLAG(bool, is_sender, true,
     "Whether this peer is sender (true) or receiver (false)");
 ABSL_FLAG(std::string, network_interface, "",
     "Network interface to use (empty for default)");
+ABSL_FLAG(std::string, y4m_path, "", 
+    "Path to Y4M file to use as video source (empty for test pattern)");
+
 
 class CustomSocketServer : public rtc::PhysicalSocketServer {
  public:
@@ -125,6 +128,7 @@ int main(int argc, char* argv[]) {
   bool is_sender = absl::GetFlag(FLAGS_is_sender);
 
   conductor->SetEmulationMode(is_emulation, is_sender);
+  conductor->SetY4mPath(absl::GetFlag(FLAGS_y4m_path));
 
   if (is_emulation) {
     std::string interface_name = absl::GetFlag(FLAGS_network_interface);

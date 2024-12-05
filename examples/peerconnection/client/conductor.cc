@@ -234,7 +234,7 @@ bool Conductor::InitializePeerConnection() {
 
   webrtc::PeerConnectionFactoryDependencies deps;
   deps.signaling_thread = signaling_thread_.get();
-  deps.task_queue_factory = webrtc::CreateDefaultTaskQueueFactory(),
+  deps.task_queue_factory = webrtc::CreateDefaultTaskQueueFactory();
   deps.audio_encoder_factory = webrtc::CreateBuiltinAudioEncoderFactory();
   deps.audio_decoder_factory = webrtc::CreateBuiltinAudioDecoderFactory();
 
@@ -268,6 +268,12 @@ bool Conductor::InitializePeerConnection() {
       RTC_LOG(LS_INFO) << "    " << param.first << ": " << param.second;
     }
   }
+
+  // Don't create ADM - this will work make device even without audio devices
+  deps.audio_mixer = nullptr;
+  deps.audio_processing = nullptr;
+  deps.adm = nullptr;
+  deps.audio_processing_builder = nullptr;
 
   deps.video_encoder_factory = std::move(video_encoder_factory);
   deps.video_decoder_factory = webrtc::CreateBuiltinVideoDecoderFactory();
@@ -616,6 +622,16 @@ void Conductor::OnMessageFromPeer(int peer_id, const std::string& message) {
       return;
     }
     RTC_LOG(LS_INFO) << "Added ICE candidate";
+
+
+    // Set high quality bitrate for 4K
+    webrtc::BitrateSettings bitrate_settings;
+    // For 4K video, use higher bitrates
+    bitrate_settings.min_bitrate_bps =    200000;    // 200 kbps min
+    bitrate_settings.start_bitrate_bps =  300000;  // 300 kbps start
+    bitrate_settings.max_bitrate_bps =  50000000;    // 50 Mbps max
+    peer_connection_->SetBitrate(bitrate_settings);
+
     return;
   }
 
@@ -869,6 +885,7 @@ void Conductor::AddTracks() {
     return;  // Already added tracks.
   }
 
+  /*
   rtc::scoped_refptr<webrtc::AudioTrackInterface> audio_track(
       peer_connection_factory_->CreateAudioTrack(
           kAudioLabel,
@@ -879,6 +896,7 @@ void Conductor::AddTracks() {
     RTC_LOG(LS_ERROR) << "Failed to add audio track to PeerConnection: "
                       << result_or_error.error().message();
   }
+  */
 
   /*
   rtc::scoped_refptr<CapturerTrackSource> video_device =
@@ -913,14 +931,6 @@ void Conductor::AddTracks() {
   const int kTargetFps = frame_generator->fps().value_or(60);
   RTC_LOG(LS_INFO) << "Y4M file native FPS: " << kTargetFps;
 
-  // Set high quality bitrate for 4K
-  webrtc::BitrateSettings bitrate_settings;
-  // For 4K video, use higher bitrates
-  bitrate_settings.min_bitrate_bps = 100000000;    // 8 Mbps min
-  bitrate_settings.start_bitrate_bps = 100000000;  // 15 Mbps start
-  bitrate_settings.max_bitrate_bps = 500000000;    // 40 Mbps max
-  //peer_connection_->SetBitrate(bitrate_settings);
-
   // No need to store resolution in a variable
   auto video_capturer = std::make_unique<webrtc::test::FrameGeneratorCapturer>(
       webrtc::Clock::GetRealTimeClock(),
@@ -945,7 +955,7 @@ void Conductor::AddTracks() {
 
   main_wnd_->StartLocalRenderer(video_track.get());
 
-  result_or_error = peer_connection_->AddTrack(video_track, {kStreamId});
+  auto result_or_error = peer_connection_->AddTrack(video_track, {kStreamId});
   if (!result_or_error.ok()) {
     RTC_LOG(LS_ERROR) << "Failed to add video track to PeerConnection: "
                       << result_or_error.error().message();
@@ -993,7 +1003,6 @@ void Conductor::AddTracks() {
     parameters.encodings.clear();
     webrtc::RtpEncodingParameters encoding;
     encoding.active = true;
-    encoding.max_bitrate_bps = std::optional<int>(10000000);  // 40 Mbps for 4K
     encoding.max_bitrate_bps = std::optional<int>(50000000);  // 40 Mbps for 4K
     encoding.max_framerate = std::optional<int>(60);          // Up to 60fps
     encoding.scale_resolution_down_by = std::optional<double>(1.0);  // No downscaling

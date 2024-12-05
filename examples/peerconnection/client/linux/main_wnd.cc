@@ -514,7 +514,7 @@ void GtkMainWnd::Draw(GtkWidget* widget, cairo_t* cr) {
   char stats_text[128];
   snprintf(stats_text, sizeof(stats_text), 
            "Resolution: %dx%d  FPS: %.1f  Bitrate: %.1f kbps", 
-           width_, height_, fps, bitrate);
+           width_, height_, fps, bitrate/1000.0f);
   
   // Add black background for better readability
   cairo_text_extents_t extents;

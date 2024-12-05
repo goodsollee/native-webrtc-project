@@ -304,11 +304,17 @@ void SendSideBandwidthEstimation::SetMinMaxBitrate(DataRate min_bitrate,
                                                    DataRate max_bitrate) {
   min_bitrate_configured_ =
       std::max(min_bitrate, kCongestionControllerMinBitrate);
+  
   if (max_bitrate > DataRate::Zero() && max_bitrate.IsFinite()) {
     max_bitrate_configured_ = std::max(min_bitrate_configured_, max_bitrate);
   } else {
     max_bitrate_configured_ = kDefaultMaxBitrate;
   }
+
+  RTC_LOG(LS_INFO) << "Min data rate: "<< min_bitrate_configured_.bps()
+                   << " bps. Max data rate: " << max_bitrate_configured_.bps()
+                   << " bps.";
+
   loss_based_bandwidth_estimator_v2_->SetMinMaxBitrate(min_bitrate_configured_,
                                                        max_bitrate_configured_);
 }

@@ -186,6 +186,7 @@ RtpCapabilities PeerConnectionFactory::GetRtpReceiverCapabilities(
 rtc::scoped_refptr<AudioSourceInterface>
 PeerConnectionFactory::CreateAudioSource(const cricket::AudioOptions& options) {
   RTC_DCHECK(signaling_thread()->IsCurrent());
+
   rtc::scoped_refptr<LocalAudioSource> source(
       LocalAudioSource::Create(&options));
   return source;
@@ -318,6 +319,7 @@ std::unique_ptr<Call> PeerConnectionFactory::CreateCall_w(
   if (!media_engine() || !context_->call_factory()) {
     return nullptr;
   }
+  
   call_config.audio_state = media_engine()->voice().GetAudioState();
 
   FieldTrialParameter<DataRate> min_bandwidth("min",

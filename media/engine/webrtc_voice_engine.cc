@@ -518,6 +518,9 @@ void WebRtcVoiceEngine::Init() {
     RTC_LOG(LS_VERBOSE) << ToString(codec);
   }
 
+// Check if ADM pointer exists
+RTC_LOG(LS_INFO) << "ADM pointer exists: " << (adm_ != nullptr);
+
 #if defined(WEBRTC_INCLUDE_INTERNAL_AUDIO_DEVICE)
   // No ADM supplied? Create a default one.
   if (!adm_) {

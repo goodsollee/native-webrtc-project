@@ -43,6 +43,12 @@ A complete testing framework for WebRTC applications built using native C++ code
 
 ##### Building from Source
 ```bash
+# Install depot tools (Linuxx)
+https://commondatastorage.googleapis.com/chrome-infra-docs/flat/depot_tools/docs/html/depot_tools_tutorial.html#_setting_up
+
+# Config
+gclient config --name src https://webrtc.googlesource.com/src
+
 # Sync dependencies
 gclient sync
 
@@ -56,22 +62,11 @@ ninja -C out/Default peerconnection_client
 ##### Running Tests
 ```bash
 # Basic connection test
-./out/Default/peerconnection_client --server=your.server.com
-
-# Example outputs
-Server: your.server.com
-Room: test_room_1
-Peers: 2
-[INFO] Starting peer connection client...
-[INFO] Connected to signaling server
-[INFO] Joined room test_room_1
-[INFO] Establishing peer connection...
-[INFO] Connection established
-```
+./out/Default/peerconnection_client --server={signaling_server} --room_id={room_id} --experiment_mode=real (or emulation), --y4m_path={your_file.y4m}
 
 ##### Common Options
 - `--server`: Signaling server address (default: localhost)
-- `--port`: Server port (default: 8888)
-- `--name`: Client name (default: auto-generated)
 - `--room-id`: Room identifier (default: auto-generated)
+- `--experiment_mode`: Real environment or emulation (default: real)
+- `--y4m_path`: Test video path (should be y4m file) (default: square test video)
 

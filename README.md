@@ -65,6 +65,12 @@ A complete testing framework for WebRTC applications built using native C++ code
     gn gen out/Default
     ```
 
+5. Install additioanl dependencies
+    ```bash
+    sudo apt-get install libwebsocket-dev
+    ```
+
+
 5. Build peer connection client:
     ```bash
     ninja -C out/Default peerconnection_client

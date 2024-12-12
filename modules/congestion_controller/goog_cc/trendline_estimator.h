@@ -87,6 +87,8 @@ class TrendlineEstimator : public DelayIncreaseDetectorInterface {
     double raw_delay_ms;
   };
 
+  double GetThreshold() const override { return threshold_; }
+
  private:
   friend class GoogCcStatePrinter;
   void Detect(double trend, double ts_delta, int64_t now_ms);

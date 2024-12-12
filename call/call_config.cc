@@ -32,6 +32,9 @@ RtpTransportConfig CallConfig::ExtractTransportConfig() const {
       network_state_predictor_factory;
   transport_config.pacer_burst_interval = pacer_burst_interval;
 
+  // Logging
+  transport_config.logging_folder = logging_folder;
+
   return transport_config;
 }
 

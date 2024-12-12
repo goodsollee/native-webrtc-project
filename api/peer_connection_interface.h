@@ -697,6 +697,9 @@ class RTC_EXPORT PeerConnectionInterface : public webrtc::RefCountInterface {
     //
     // Don't forget to update operator== if adding something.
     //
+
+    // Logging
+    std::string logging_folder;
   };
 
   // See: https://www.w3.org/TR/webrtc/#idl-def-rtcofferansweroptions

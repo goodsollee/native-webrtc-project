@@ -49,6 +49,8 @@ struct NetworkControllerConfig {
   // Initial stream specific configuration, these are changed at any later time
   // by calls to OnStreamsConfig.
   StreamsConfig stream_based_config;
+
+  std::optional<std::string> logging_folder;
 };
 
 // NetworkControllerInterface is implemented by network controllers. A network

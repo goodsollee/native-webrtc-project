@@ -502,6 +502,7 @@ bool PeerConnectionInterface::RTCConfiguration::operator==(
     std::vector<rtc::NetworkMask> vpn_list;
     PortAllocatorConfig port_allocator_config;
     std::optional<TimeDelta> pacer_burst_interval;
+    std::string logging_folder;
   };
   static_assert(sizeof(stuff_being_tested_for_equality) == sizeof(*this),
                 "Did you add something to RTCConfiguration and forget to "
@@ -563,7 +564,8 @@ bool PeerConnectionInterface::RTCConfiguration::operator==(
          port_allocator_config.min_port == o.port_allocator_config.min_port &&
          port_allocator_config.max_port == o.port_allocator_config.max_port &&
          port_allocator_config.flags == o.port_allocator_config.flags &&
-         pacer_burst_interval == o.pacer_burst_interval;
+         pacer_burst_interval == o.pacer_burst_interval &&
+         logging_folder == o.logging_folder;
 }
 
 bool PeerConnectionInterface::RTCConfiguration::operator!=(

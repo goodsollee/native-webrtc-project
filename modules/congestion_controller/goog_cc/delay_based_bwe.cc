@@ -63,6 +63,83 @@ BweSeparateAudioPacketsSettings::Parser() {
       "time_threshold", &time_threshold);
 }
 
+class DelayBasedCcLogger::Impl {
+ public:
+  void SetLoggingFolder(const std::optional<std::string>& logging_folder) {
+    if (!logging_folder.has_value() || logging_folder->empty()) {
+      return;
+    }
+
+    std::string filename = *logging_folder + "/delay_cc_metrics.log";
+    log_file_.open(filename, std::ios_base::app);  // Append mode
+
+    if (log_file_.is_open()) {
+      LogHeader();
+      RTC_LOG(LS_INFO) << "DelayBasedCcLogger: Logging to " << filename;
+    } else {
+      RTC_LOG(LS_ERROR) << "DelayBasedCcLogger: Failed to open " << filename;
+    }
+  }
+
+  void LogMetrics(int64_t timestamp_ms,
+                int64_t bitrate_bps,
+                double delay_jitter_ms,
+                double threshold_ms,
+                BandwidthUsage state) {
+    if (!log_file_.is_open())
+      return;
+
+    int state_value;
+    switch (state) {
+      case BandwidthUsage::kBwNormal:
+        state_value = 0;
+        break;
+      case BandwidthUsage::kBwUnderusing:
+        state_value = -1;
+        break;
+      case BandwidthUsage::kBwOverusing:
+        state_value = 1;
+        break;
+      default:
+        state_value = 0;  // Default to normal state
+    }
+
+    log_file_ << timestamp_ms << ","
+              << bitrate_bps << ","
+              << delay_jitter_ms << ","
+              << threshold_ms << ","
+              << state_value
+              << std::endl;
+  }
+
+ private:
+  void LogHeader() {
+    log_file_ << "Timestamp(ms),Bitrate(bps),DelayJitter(ms),"
+              << "Threshold(ms),CongestionState"
+              << std::endl;
+  }
+
+  std::ofstream log_file_;
+};
+
+DelayBasedCcLogger::DelayBasedCcLogger() : impl_(std::make_unique<Impl>()) {}
+
+DelayBasedCcLogger::~DelayBasedCcLogger() = default;
+
+void DelayBasedCcLogger::SetLoggingFolder(
+    const std::optional<std::string>& logging_folder) {
+  impl_->SetLoggingFolder(logging_folder);
+}
+
+void DelayBasedCcLogger::LogMetrics(int64_t timestamp_ms,
+                                   int64_t bitrate_bps,
+                                   double delay_jitter_ms,
+                                   double threshold_ms,
+                                   BandwidthUsage state) {
+  impl_->LogMetrics(timestamp_ms, bitrate_bps, delay_jitter_ms, threshold_ms,
+                    state);
+}
+
 DelayBasedBwe::Result::Result()
     : updated(false),
       probe(false),
@@ -88,7 +165,8 @@ DelayBasedBwe::DelayBasedBwe(const FieldTrialsView* key_value_config,
       uma_recorded_(false),
       rate_control_(*key_value_config, /*send_side=*/true),
       prev_bitrate_(DataRate::Zero()),
-      prev_state_(BandwidthUsage::kBwNormal) {
+      prev_state_(BandwidthUsage::kBwNormal),
+      delay_cc_logger_(std::make_unique<DelayBasedCcLogger>()) {
   RTC_LOG(LS_INFO)
       << "Initialized DelayBasedBwe with separate audio overuse detection"
       << separate_audio_.Parser()->Encode();
@@ -201,6 +279,17 @@ void DelayBasedBwe::IncomingPacketFeedback(const PacketResult& packet_feedback,
                                     packet_feedback.sent_packet.send_time.ms(),
                                     packet_feedback.receive_time.ms(),
                                     packet_size.bytes(), calculated_deltas);
+
+  double delay_jitter_ms = recv_delta.ms<double>() - send_delta.ms<double>();
+  double threshold_ms = delay_detector_for_packet->GetThreshold();
+  BandwidthUsage detector_state = delay_detector_for_packet->State();
+  // Log the current state
+  delay_cc_logger_->LogMetrics(
+      at_time.ms(),
+      prev_bitrate_.bps(),
+      delay_jitter_ms,
+      threshold_ms,
+      detector_state);
 }
 
 DataRate DelayBasedBwe::TriggerOveruse(Timestamp at_time,

@@ -360,6 +360,7 @@ std::unique_ptr<Call> PeerConnectionFactory::CreateCall_w(
   call_config.decode_metronome = decode_metronome_.get();
   call_config.encode_metronome = encode_metronome_.get();
   call_config.pacer_burst_interval = configuration.pacer_burst_interval;
+  call_config.logging_folder = configuration.logging_folder;
   return context_->call_factory()->CreateCall(std::move(call_config));
 }
 

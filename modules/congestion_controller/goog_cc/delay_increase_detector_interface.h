@@ -37,6 +37,8 @@ class DelayIncreaseDetectorInterface {
                       size_t packet_size,
                       bool calculated_deltas) = 0;
 
+  virtual double GetThreshold() const = 0;
+
   virtual BandwidthUsage State() const = 0;
 };
 

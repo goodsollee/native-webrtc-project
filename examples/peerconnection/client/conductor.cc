@@ -361,6 +361,9 @@ bool Conductor::CreatePeerConnection() {
   config.continual_gathering_policy = 
       webrtc::PeerConnectionInterface::GATHER_CONTINUALLY;
 
+  // Logging
+  config.logging_folder = log_dir_; 
+
   // Generate and add certificates
   rtc::scoped_refptr<rtc::RTCCertificate> certificate = 
       rtc::RTCCertificateGenerator::GenerateCertificate(

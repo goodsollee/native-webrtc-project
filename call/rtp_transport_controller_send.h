@@ -223,6 +223,9 @@ class RtpTransportControllerSend final
   NetworkControllerConfig initial_config_ RTC_GUARDED_BY(sequence_checker_);
   StreamsConfig streams_config_ RTC_GUARDED_BY(sequence_checker_);
 
+  // Logging
+  std::optional<std::string> logging_folder_;
+
   const bool reset_feedback_on_route_change_;
   const bool add_pacing_to_cwin_;
   const bool reset_bwe_on_adapter_id_change_;

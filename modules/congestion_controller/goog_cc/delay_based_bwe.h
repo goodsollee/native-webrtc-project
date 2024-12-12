@@ -16,6 +16,9 @@
 #include <memory>
 #include <optional>
 #include <vector>
+#include <fstream>
+#include <optional>
+#include <string>
 
 #include "api/field_trials_view.h"
 #include "api/network_state_predictor.h"
@@ -49,6 +52,31 @@ struct BweSeparateAudioPacketsSettings {
 
   std::unique_ptr<StructParametersParser> Parser();
 };
+
+
+class DelayBasedCcLogger {
+ public:
+  DelayBasedCcLogger();
+  ~DelayBasedCcLogger();
+
+  // Prevents copying and moving
+  DelayBasedCcLogger(const DelayBasedCcLogger&) = delete;
+  DelayBasedCcLogger& operator=(const DelayBasedCcLogger&) = delete;
+  DelayBasedCcLogger(DelayBasedCcLogger&&) = delete;
+  DelayBasedCcLogger& operator=(DelayBasedCcLogger&&) = delete;
+
+  void SetLoggingFolder(const std::optional<std::string>& logging_folder);
+  void LogMetrics(int64_t timestamp_ms,
+                  int64_t bitrate_bps,
+                  double delay_jitter_ms,
+                  double threshold_ms,
+                  BandwidthUsage state);
+
+ private:
+  class Impl;
+  std::unique_ptr<Impl> impl_;
+};
+
 
 class DelayBasedBwe {
  public:
@@ -87,6 +115,10 @@ class DelayBasedBwe {
                           std::optional<DataRate> link_capacity);
   DataRate last_estimate() const { return prev_bitrate_; }
   BandwidthUsage last_state() const { return prev_state_; }
+
+  void SetLoggingFolder(const std::optional<std::string>& logging_folder) {
+    delay_cc_logger_->SetLoggingFolder(logging_folder);
+  }
 
  private:
   friend class GoogCcStatePrinter;
@@ -129,6 +161,8 @@ class DelayBasedBwe {
   AimdRateControl rate_control_;
   DataRate prev_bitrate_;
   BandwidthUsage prev_state_;
+
+  std::unique_ptr<DelayBasedCcLogger> delay_cc_logger_;
 };
 
 }  // namespace webrtc

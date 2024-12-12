@@ -141,6 +141,9 @@ class GoogCcNetworkController : public NetworkControllerInterface {
   bool previously_in_alr_ = false;
 
   std::optional<DataSize> current_data_window_;
+
+  // Logging
+  std::optional<std::string> logging_folder_;
 };
 
 }  // namespace webrtc

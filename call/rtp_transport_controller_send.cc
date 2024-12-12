@@ -143,6 +143,11 @@ RtpTransportControllerSend::RtpTransportControllerSend(
     // Default burst interval overriden by config.
     pacer_.SetSendBurstInterval(*config.pacer_burst_interval);
   }
+
+  if (!config.logging_folder.empty()) {
+    logging_folder_ = config.logging_folder;
+  }
+
   packet_router_.RegisterNotifyBweCallback(
       [this](const RtpPacketToSend& packet,
              const PacedPacketInfo& pacing_info) {
@@ -692,6 +697,11 @@ void RtpTransportControllerSend::MaybeCreateControllers() {
   initial_config_.constraints.at_time =
       Timestamp::Millis(env_.clock().TimeInMilliseconds());
   initial_config_.stream_based_config = streams_config_;
+
+  // Logging
+  if (!logging_folder_->empty()) {
+    initial_config_.logging_folder = logging_folder_;
+  }
 
   // TODO(srte): Use fallback controller if no feedback is available.
   if (controller_factory_override_) {

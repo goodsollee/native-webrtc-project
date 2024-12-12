@@ -149,6 +149,12 @@ GoogCcNetworkController::GoogCcNetworkController(NetworkControllerConfig config,
       env_.field_trials().Lookup("WebRTC-Bwe-SafeResetOnRouteChange"));
   if (delay_based_bwe_)
     delay_based_bwe_->SetMinBitrate(kCongestionControllerMinBitrate);
+
+  // Logging
+  logging_folder_ = config.logging_folder;
+  delay_based_bwe_->SetLoggingFolder(logging_folder_);
+  bandwidth_estimation_->SetLoggingFolder(logging_folder_);
+  RTC_LOG(LS_INFO) << "GoogCcNetworkController: Logging to " << logging_folder_.value_or("not set");
 }
 
 GoogCcNetworkController::~GoogCcNetworkController() {}

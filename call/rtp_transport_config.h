@@ -37,6 +37,9 @@ struct RtpTransportConfig {
 
   // The burst interval of the pacer, see TaskQueuePacedSender constructor.
   std::optional<TimeDelta> pacer_burst_interval;
+
+  // Logging
+  std::string logging_folder;
 };
 }  // namespace webrtc
 

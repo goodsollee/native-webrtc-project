@@ -20,6 +20,7 @@
 #include <optional>
 #include <utility>
 #include <vector>
+#include <string>
 
 #include "api/field_trials_view.h"
 #include "api/transport/bandwidth_usage.h"
@@ -34,6 +35,18 @@
 namespace webrtc {
 
 class RtcEventLog;
+
+class LossCCLogging {
+public:
+    LossCCLogging();
+    ~LossCCLogging();
+    void Initialize(const std::optional<std::string>& logging_folder);
+    void LogMetrics(int64_t timestamp_ms, int64_t bitrate_bps, float loss_rate, int state);
+
+private:
+    class Impl;
+    std::unique_ptr<Impl> impl_;
+};
 
 class LinkCapacityTracker {
  public:
@@ -130,6 +143,10 @@ class SendSideBandwidthEstimation {
                                 bool in_alr);
   bool PaceAtLossBasedEstimate() const;
 
+  void SetLoggingFolder(const std::optional<std::string>& logging_folder) {
+    loss_cc_logger_.Initialize(logging_folder);
+  }
+
  private:
   friend class GoogCcStatePrinter;
 
@@ -213,6 +230,9 @@ class SendSideBandwidthEstimation {
   std::unique_ptr<LossBasedBweV2> loss_based_bandwidth_estimator_v2_;
   LossBasedState loss_based_state_;
   FieldTrialFlag disable_receiver_limit_caps_only_;
+
+  // Logging
+  LossCCLogging loss_cc_logger_;
 };
 }  // namespace webrtc
 #endif  // MODULES_CONGESTION_CONTROLLER_GOOG_CC_SEND_SIDE_BANDWIDTH_ESTIMATION_H_

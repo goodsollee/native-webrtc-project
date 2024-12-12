@@ -89,6 +89,9 @@ struct CallConfig {
 
   // Enables send packet batching from the egress RTP sender.
   bool enable_send_packet_batching = false;
+
+  // Logging
+  std::string logging_folder;
 };
 
 }  // namespace webrtc

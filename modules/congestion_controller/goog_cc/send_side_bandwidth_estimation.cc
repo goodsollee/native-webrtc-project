@@ -19,6 +19,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <fstream>
 
 #include "api/field_trials_view.h"
 #include "api/rtc_event_log/rtc_event_log.h"
@@ -108,6 +109,53 @@ bool ReadBweLossExperimentParameters(const FieldTrialsView& field_trials,
   return false;
 }
 }  // namespace
+
+class LossCCLogging::Impl {
+public:
+    void Initialize(const std::optional<std::string>& logging_folder) {
+        if (!logging_folder.has_value() || logging_folder->empty()) {
+            return;
+        }
+
+        std::string filename = *logging_folder + "/loss_cc_metrics.log";
+        log_file_.open(filename, std::ios_base::app); // Append mode
+        
+        if (log_file_.is_open()) {
+            LogHeader();
+        }
+    }
+
+    void LogMetrics(int64_t timestamp_ms, int64_t bitrate_bps, float loss_rate, int state) {
+        if (!log_file_.is_open()) return;
+        
+        log_file_ << timestamp_ms << ","
+                  << bitrate_bps << ","
+                  << loss_rate << ","
+                  << state
+                  << std::endl;
+    }
+
+private:
+    void LogHeader() {
+        log_file_ << "Timestamp(ms),Bitrate(bps),LossRate,State(-1/0/1)" << std::endl;
+    }
+
+    std::ofstream log_file_;
+};
+
+LossCCLogging::LossCCLogging() : impl_(std::make_unique<Impl>()) {}
+LossCCLogging::~LossCCLogging() = default;
+
+void LossCCLogging::Initialize(const std::optional<std::string>& logging_folder) {
+    impl_->Initialize(logging_folder);
+}
+
+void LossCCLogging::LogMetrics(int64_t timestamp_ms, int64_t bitrate_bps, 
+                           float loss_rate, int state) {
+    impl_->LogMetrics(timestamp_ms, bitrate_bps, loss_rate, state);
+}
+
+
 
 void LinkCapacityTracker::UpdateDelayBasedEstimate(
     Timestamp at_time,
@@ -473,19 +521,31 @@ void SendSideBandwidthEstimation::UpdateRtt(TimeDelta rtt, Timestamp at_time) {
 }
 
 void SendSideBandwidthEstimation::UpdateEstimate(Timestamp at_time) {
+
+  // Log state
+  int state = 0;
+  float loss = last_fraction_loss_ / 256.0f;
+
   if (rtt_backoff_.IsRttAboveLimit()) {
     if (at_time - time_last_decrease_ >= rtt_backoff_.drop_interval_ &&
         current_target_ > rtt_backoff_.bandwidth_floor_) {
+      
       time_last_decrease_ = at_time;
       DataRate new_bitrate =
           std::max(current_target_ * rtt_backoff_.drop_fraction_,
                    rtt_backoff_.bandwidth_floor_.Get());
       link_capacity_.OnRttBackoff(new_bitrate, at_time);
       UpdateTargetBitrate(new_bitrate, at_time);
+
+      state = -1;  // RTT backoff reduction
+      loss_cc_logger_.LogMetrics(at_time.ms(), current_target_.bps(), loss, state);
+
       return;
     }
     // TODO(srte): This is likely redundant in most cases.
     ApplyTargetLimits(at_time);
+    loss_cc_logger_.LogMetrics(at_time.ms(), current_target_.bps(), loss, state);
+
     return;
   }
 
@@ -513,6 +573,10 @@ void SendSideBandwidthEstimation::UpdateEstimate(Timestamp at_time) {
             std::make_pair(at_time, current_target_));
       }
       UpdateTargetBitrate(new_bitrate, at_time);
+
+      state = 1;
+      loss_cc_logger_.LogMetrics(at_time.ms(), current_target_.bps(), loss, state);
+
       return;
     }
   }
@@ -543,7 +607,7 @@ void SendSideBandwidthEstimation::UpdateEstimate(Timestamp at_time) {
   TimeDelta time_since_loss_packet_report = at_time - last_loss_packet_report_;
   if (time_since_loss_packet_report < 1.2 * kMaxRtcpFeedbackInterval) {
     // We only care about loss above a given bitrate threshold.
-    float loss = last_fraction_loss_ / 256.0f;
+    //float loss = last_fraction_loss_ / 256.0f;
     // We only make decisions based on loss when the bitrate is above a
     // threshold. This is a crude way of handling loss which is uncorrelated
     // to congestion.
@@ -566,10 +630,16 @@ void SendSideBandwidthEstimation::UpdateEstimate(Timestamp at_time) {
       // rates).
       new_bitrate += DataRate::BitsPerSec(1000);
       UpdateTargetBitrate(new_bitrate, at_time);
+
+      state = 1;
+      loss_cc_logger_.LogMetrics(at_time.ms(), current_target_.bps(), loss, state);
+
       return;
     } else if (current_target_ > bitrate_threshold_) {
       if (loss <= high_loss_threshold_) {
         // Loss between 2% - 10%: Do nothing.
+        state = 0;
+        loss_cc_logger_.LogMetrics(at_time.ms(), current_target_.bps(), loss, state);
       } else {
         // Loss > 10%: Limit the rate decreases to once a kBweDecreaseInterval
         // + rtt.
@@ -587,6 +657,10 @@ void SendSideBandwidthEstimation::UpdateEstimate(Timestamp at_time) {
               512.0);
           has_decreased_since_last_fraction_loss_ = true;
           UpdateTargetBitrate(new_bitrate, at_time);
+
+          state = -1;
+          loss_cc_logger_.LogMetrics(at_time.ms(), current_target_.bps(), loss, state);
+
           return;
         }
       }
@@ -594,6 +668,7 @@ void SendSideBandwidthEstimation::UpdateEstimate(Timestamp at_time) {
   }
   // TODO(srte): This is likely redundant in most cases.
   ApplyTargetLimits(at_time);
+  loss_cc_logger_.LogMetrics(at_time.ms(), current_target_.bps(), loss, state);
 }
 
 void SendSideBandwidthEstimation::UpdatePropagationRtt(

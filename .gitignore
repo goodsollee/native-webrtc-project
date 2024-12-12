@@ -39,6 +39,8 @@
 .pydevproject
 .settings
 .sw?
+/build
+/buildtools
 /Makefile
 /base
 /ios

@@ -69,6 +69,8 @@ class Conductor : public webrtc::PeerConnectionObserver,
 
   void SetY4mPath(const std::string& path) { y4m_path_ = path; }
 
+  void SetLogDirectory(const std::string& log_dir) { log_dir_ = log_dir; }
+
  protected:
   ~Conductor();
   bool InitializePeerConnection();
@@ -180,6 +182,7 @@ class Conductor : public webrtc::PeerConnectionObserver,
   bool is_emulation_ = false;
   bool is_sender_ = true;
   std::string y4m_path_;
+  std::string log_dir_;
   
 };
 

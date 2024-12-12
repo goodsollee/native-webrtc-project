@@ -11,6 +11,7 @@
 #include <glib.h>
 #include <gtk/gtk.h>
 #include <stdio.h>
+#include <filesystem>
 
 #include "absl/flags/parse.h"
 #include "absl/flags/usage.h"
@@ -36,6 +37,8 @@ ABSL_FLAG(std::string, network_interface, "",
     "Network interface to use (empty for default)");
 ABSL_FLAG(std::string, y4m_path, "", 
     "Path to Y4M file to use as video source (empty for test pattern)");
+// In flag_defs.h, add:
+ABSL_FLAG(std::string, log_date, "", "Date for log folder (YYYY-MM-DD)");
 
 class CustomSocketServer : public rtc::PhysicalSocketServer {
  public:
@@ -70,6 +73,7 @@ class CustomSocketServer : public rtc::PhysicalSocketServer {
   Conductor* conductor_;
   PeerConnectionClient* client_;
 };
+
 
 int main(int argc, char* argv[]) {
   // Set the program usage message
@@ -156,8 +160,28 @@ Example Commands:
   auto conductor = rtc::make_ref_counted<Conductor>(&client, &wnd);
   conductor->SetRoomId(absl::GetFlag(FLAGS_room_id));
 
-  // Configure experiment mode
+  // Get log date - if empty, use current date
+  std::string date = absl::GetFlag(FLAGS_log_date);
+  if (date.empty()) {
+      std::time_t now = std::time(nullptr);
+      char date_buf[20];  // Increased buffer size for full timestamp
+      std::strftime(date_buf, sizeof(date_buf), "%Y-%m-%d_%H-%M-%S", std::localtime(&now));
+      date = date_buf;
+  }
+    
+  // Create log directory path
+  std::string room_id = absl::GetFlag(FLAGS_room_id);
   bool is_sender = absl::GetFlag(FLAGS_is_sender);
+  std::string role = is_sender ? "sender" : "receiver";
+  std::string log_dir = "webrtc_logs/" + date + "_" + room_id + "/" + role;
+  
+  // Create directory
+  std::filesystem::create_directories(log_dir);
+  
+  // Pass log_dir to conductor
+  conductor->SetLogDirectory(log_dir);
+
+  // Configure experiment mode
   conductor->SetEmulationMode(is_emulation, is_sender);
   conductor->SetY4mPath(absl::GetFlag(FLAGS_y4m_path));
 

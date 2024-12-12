@@ -885,18 +885,12 @@ void Conductor::AddTracks() {
     return;  // Already added tracks.
   }
 
-  /*
-  rtc::scoped_refptr<webrtc::AudioTrackInterface> audio_track(
-      peer_connection_factory_->CreateAudioTrack(
-          kAudioLabel,
-          peer_connection_factory_->CreateAudioSource(cricket::AudioOptions())
-              .get()));
-  auto result_or_error = peer_connection_->AddTrack(audio_track, {kStreamId});
-  if (!result_or_error.ok()) {
-    RTC_LOG(LS_ERROR) << "Failed to add audio track to PeerConnection: "
-                      << result_or_error.error().message();
+  // If we're in receiver-only mode, don't add any local tracks
+  if (!is_sender_) {
+    RTC_LOG(LS_INFO) << "Operating in receiver-only mode";
+    main_wnd_->SwitchToStreamingUI();
+    return;
   }
-  */
 
   bool use_camera = true;
 

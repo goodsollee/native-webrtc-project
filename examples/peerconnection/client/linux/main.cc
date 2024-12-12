@@ -13,6 +13,7 @@
 #include <stdio.h>
 
 #include "absl/flags/parse.h"
+#include "absl/flags/usage.h"
 #include "api/scoped_refptr.h"
 #include "examples/peerconnection/client/conductor.h"
 #include "examples/peerconnection/client/flag_defs.h"
@@ -26,7 +27,7 @@
 
 #include "absl/flags/flag.h"
 
-
+// Define flags without the help flag (it's built into absl)
 ABSL_FLAG(std::string, experiment_mode, "real", 
     "Experiment mode: 'real' for real-world or 'emulation' for network emulation");
 ABSL_FLAG(bool, is_sender, true, 
@@ -35,7 +36,6 @@ ABSL_FLAG(std::string, network_interface, "",
     "Network interface to use (empty for default)");
 ABSL_FLAG(std::string, y4m_path, "", 
     "Path to Y4M file to use as video source (empty for test pattern)");
-
 
 class CustomSocketServer : public rtc::PhysicalSocketServer {
  public:
@@ -48,18 +48,10 @@ class CustomSocketServer : public rtc::PhysicalSocketServer {
   void set_client(PeerConnectionClient* client) { client_ = client; }
   void set_conductor(Conductor* conductor) { conductor_ = conductor; }
 
-  // Override so that we can also pump the GTK message loop.
-  // This function never waits.
   bool Wait(webrtc::TimeDelta max_wait_duration, bool process_io) override {
-    // Pump GTK events.
-    // TODO(henrike): We really should move either the socket server or UI to a
-    // different thread.  Alternatively we could look at merging the two loops
-    // by implementing a dispatcher for the socket server and/or use
-    // g_main_context_set_poll_func.
     while (gtk_events_pending())
       gtk_main_iteration();
 
-    // Service WebSocket client.
     if (conductor_) {
       conductor_->ServiceWebSocket();
     }
@@ -80,30 +72,73 @@ class CustomSocketServer : public rtc::PhysicalSocketServer {
 };
 
 int main(int argc, char* argv[]) {
+  // Set the program usage message
+  std::string usage_str = R"(WebRTC Peer Connection Client
+
+Basic Options:
+  --help                      Display this help message (built-in Abseil flag)
+  --server=<hostname>         Signaling server hostname (default: localhost)
+  --port=<port>              Server port (default: 8888)
+  --room_id=<id>             Room ID for the session
+
+Experiment Mode Options:
+  --experiment_mode=<mode>    Operation mode (default: real)
+                             - 'real': Normal bidirectional WebRTC
+                             - 'emulation': Network emulation mode
+
+  --is_sender=<bool>         Role in emulation mode (default: true)
+                             - true: Send video only
+                             - false: Receive video only
+
+  --network_interface=<name>  Network interface to use (required in emulation mode)
+                             Example: eth0, wlan0
+
+Video Source Options:
+  --y4m_path=<path>         Path to Y4M file to use as video source
+                            If not specified, uses test pattern
+
+Example Commands:
+  # Run as video sender using Y4M file:
+  ./peerconnection_client --experiment_mode=emulation --is_sender=true \
+      --network_interface=eth0 --y4m_path=/path/to/video.y4m \
+      --server=localhost --port=8888
+
+  # Run as video receiver:
+  ./peerconnection_client --experiment_mode=emulation --is_sender=false \
+      --network_interface=eth0 --server=localhost --port=8888
+)";
+
+  // Set the usage message
+  absl::SetProgramUsageMessage(usage_str);
+
   gtk_init(&argc, &argv);
-// g_type_init API is deprecated (and does nothing) since glib 2.35.0, see:
-// https://mail.gnome.org/archives/commits-list/2012-November/msg07809.html
 #if !GLIB_CHECK_VERSION(2, 35, 0)
   g_type_init();
 #endif
-// g_thread_init API is deprecated since glib 2.31.0, see release note:
-// http://mail.gnome.org/archives/gnome-announce-list/2011-October/msg00041.html
 #if !GLIB_CHECK_VERSION(2, 31, 0)
   g_thread_init(NULL);
 #endif
 
-  absl::ParseCommandLine(argc, argv);
+  // Parse command line flags
+  std::vector<char*> remaining_args = absl::ParseCommandLine(argc, argv);
 
-  // InitFieldTrialsFromString stores the char*, so the char array must outlive
-  // the application.
-  const std::string forced_field_trials =
-      absl::GetFlag(FLAGS_force_fieldtrials);
+  const std::string forced_field_trials = absl::GetFlag(FLAGS_force_fieldtrials);
   webrtc::field_trial::InitFieldTrialsFromString(forced_field_trials.c_str());
 
-  // Abort if the user specifies a port that is outside the allowed
-  // range [1, 65535].
+  // Validate port number
   if ((absl::GetFlag(FLAGS_port) < 1) || (absl::GetFlag(FLAGS_port) > 65535)) {
     printf("Error: %i is not a valid port.\n", absl::GetFlag(FLAGS_port));
+    printf("Use --help for usage information.\n");
+    return -1;
+  }
+
+  // Validate emulation mode settings
+  std::string experiment_mode = absl::GetFlag(FLAGS_experiment_mode);
+  bool is_emulation = (experiment_mode == "emulation");
+  
+  if (is_emulation && absl::GetFlag(FLAGS_network_interface).empty()) {
+    printf("Error: Network interface (--network_interface) is required in emulation mode.\n");
+    printf("Use --help for usage information.\n");
     return -1;
   }
 
@@ -117,42 +152,25 @@ int main(int argc, char* argv[]) {
   rtc::AutoSocketServerThread thread(&socket_server);
 
   rtc::InitializeSSL();
-  // Must be constructed after we set the socketserver.
   PeerConnectionClient client;
   auto conductor = rtc::make_ref_counted<Conductor>(&client, &wnd);
   conductor->SetRoomId(absl::GetFlag(FLAGS_room_id));
 
-  // Experimental settings
-  std::string experiment_mode = absl::GetFlag(FLAGS_experiment_mode);
-  bool is_emulation = (experiment_mode == "emulation");
+  // Configure experiment mode
   bool is_sender = absl::GetFlag(FLAGS_is_sender);
-
   conductor->SetEmulationMode(is_emulation, is_sender);
   conductor->SetY4mPath(absl::GetFlag(FLAGS_y4m_path));
 
   if (is_emulation) {
-    std::string interface_name = absl::GetFlag(FLAGS_network_interface);
-    if (interface_name.empty()) {
-      RTC_LOG(LS_ERROR) << "Network profile and interface required for emulation mode";
-      return -1;
-    }
-    conductor->SetNetInterface(interface_name);
+    conductor->SetNetInterface(absl::GetFlag(FLAGS_network_interface));
   }
 
   socket_server.set_client(&client);
   socket_server.set_conductor(conductor.get());
 
   thread.Run();
-
-  // gtk_main();
   wnd.Destroy();
 
-  // TODO(henrike): Run the Gtk main loop to tear down the connection.
-  /*
-  while (gtk_events_pending()) {
-    gtk_main_iteration();
-  }
-  */
   rtc::CleanupSSL();
   return 0;
 }

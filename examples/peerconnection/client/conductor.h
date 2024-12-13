@@ -41,6 +41,32 @@ namespace cricket {
 class VideoRenderer;
 }  // namespace cricket
 
+// In conductor.h:
+class RTCStatsCollectorCallbackImpl : public webrtc::RTCStatsCollectorCallback {
+ public:
+  explicit RTCStatsCollectorCallbackImpl(std::ofstream& stats_file,
+                                       rtc::Thread* signaling_thread)
+      : stats_file_(stats_file),
+        signaling_thread_(signaling_thread) {
+    RTC_LOG(LS_INFO) << "Creating stats collector";
+  }
+  
+  ~RTCStatsCollectorCallbackImpl() override {
+    RTC_LOG(LS_INFO) << "Destroying stats collector";
+  }
+
+  void OnStatsDelivered(
+      const rtc::scoped_refptr<const webrtc::RTCStatsReport>& report) override;
+
+ protected:
+  void OnStatsDeliveredOnSignalingThread(
+      rtc::scoped_refptr<const webrtc::RTCStatsReport> report);
+
+ private:
+  std::ofstream& stats_file_;
+  rtc::Thread* signaling_thread_;
+};
+
 class Conductor : public webrtc::PeerConnectionObserver,
                   public webrtc::CreateSessionDescriptionObserver,
                   public PeerConnectionClientObserver,
@@ -203,6 +229,17 @@ class Conductor : public webrtc::PeerConnectionObserver,
   bool is_sender_ = true;
   std::string y4m_path_;
   std::string log_dir_;
+
+  // Stats
+  void GetReceiverVideoStats();
+  void OnStatsDelivered(const rtc::scoped_refptr<const webrtc::RTCStatsReport>& report);
+  std::ofstream stats_file_;
+  int64_t last_stats_log_ms_ = 0;
+  static constexpr int kStatsIntervalMs = 1000;  // Log stats every second
+
+  bool stats_collection_started_ = false;
+  void StartPeriodicStatCollection();
+  void OnPeriodicStats();
 
   // Callback members
   StatsCallback stats_callback_;

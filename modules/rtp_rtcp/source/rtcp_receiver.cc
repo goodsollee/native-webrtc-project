@@ -176,7 +176,8 @@ RTCPReceiver::RTCPReceiver(const Environment& env,
                                            : kDefaultVideoReportInterval)),
       // TODO(bugs.webrtc.org/10774): Remove fallback.
       remote_ssrc_(0),
-      xr_rrtr_status_(config.non_sender_rtt_measurement),
+      xr_rrtr_status_(true),
+      //xr_rrtr_status_(config.non_sender_rtt_measurement),
       oldest_tmmbr_info_(Timestamp::Zero()),
       cname_callback_(config.rtcp_cname_callback),
       report_block_data_observer_(config.report_block_data_observer),
@@ -894,6 +895,8 @@ void RTCPReceiver::HandleXrDlrrReportBlock(uint32_t sender_ssrc,
   uint32_t rtt_ntp = now_ntp - delay_ntp - send_time_ntp;
   TimeDelta rtt = CompactNtpRttToTimeDelta(rtt_ntp);
   xr_rr_rtt_ = rtt;
+
+  RTC_LOG(LS_INFO) << "RTT from XR: " << rtt.ms() << " ms.";
 
   non_sender_rtts_[sender_ssrc].Update(rtt);
 }

@@ -986,7 +986,6 @@ void Conductor::AddTracks() {
 
 
   // If we're in receiver-only mode, don't add any local tracks
-  
   if (!is_sender_) {
     RTC_LOG(LS_INFO) << "Operating in receiver-only mode";
     main_wnd_->SwitchToStreamingUI();

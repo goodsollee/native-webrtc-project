@@ -70,7 +70,7 @@ void RTCStatsCollectorCallback::ProcessInboundRTPStats(const webrtc::RTCStats& s
     }
 
     // Write stats to file with mutex protection
-    if (frame_decoded > 0) {
+    if (frames_decoded > 0) {
         std::lock_guard<std::mutex> lock(stats_mutex_);
         if (stats_file_.is_open()) {
             stats_file_ << rtc::TimeMillis() << ","

@@ -693,6 +693,8 @@ if (is_linux || is_chromeos || is_win) {
       "peerconnection/client/defaults.h",
       "peerconnection/client/peer_connection_client.cc",
       "peerconnection/client/peer_connection_client.h",
+      "peerconnection/client/rtc_stats_collector.cc",
+      "peerconnection/client/rtc_stats_collector.h",
     ]
 
     deps = [
@@ -821,6 +823,8 @@ if (is_linux || is_chromeos || is_win) {
       "peerconnection/client/defaults.h",
       "peerconnection/client/peer_connection_client.cc",
       "peerconnection/client/peer_connection_client.h",
+      "peerconnection/client/rtc_stats_collector.cc",
+      "peerconnection/client/rtc_stats_collector.h",
     ]
 
     deps = [

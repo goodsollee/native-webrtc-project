@@ -29,6 +29,7 @@
 #include "examples/peerconnection/client/peer_connection_client.h"
 #include "rtc_base/thread.h"
 
+#include "examples/peerconnection/client/rtc_stats_collector.h"
 #include "examples/peerconnection/client/websocket_client.h"
 #include <curl/curl.h>
 #include "json/value.h"
@@ -40,32 +41,6 @@ class VideoCaptureModule;
 namespace cricket {
 class VideoRenderer;
 }  // namespace cricket
-
-// In conductor.h:
-class RTCStatsCollectorCallbackImpl : public webrtc::RTCStatsCollectorCallback {
- public:
-  explicit RTCStatsCollectorCallbackImpl(std::ofstream& stats_file,
-                                       rtc::Thread* signaling_thread)
-      : stats_file_(stats_file),
-        signaling_thread_(signaling_thread) {
-    RTC_LOG(LS_INFO) << "Creating stats collector";
-  }
-  
-  ~RTCStatsCollectorCallbackImpl() override {
-    RTC_LOG(LS_INFO) << "Destroying stats collector";
-  }
-
-  void OnStatsDelivered(
-      const rtc::scoped_refptr<const webrtc::RTCStatsReport>& report) override;
-
- protected:
-  void OnStatsDeliveredOnSignalingThread(
-      rtc::scoped_refptr<const webrtc::RTCStatsReport> report);
-
- private:
-  std::ofstream& stats_file_;
-  rtc::Thread* signaling_thread_;
-};
 
 class Conductor : public webrtc::PeerConnectionObserver,
                   public webrtc::CreateSessionDescriptionObserver,
@@ -89,15 +64,6 @@ class Conductor : public webrtc::PeerConnectionObserver,
     STATS_ERROR           // Any errors during stats collection
   };
 
-  // Callback function type definitions
-  using StatsCallback = std::function<void(StatsType type, const std::string& message)>;
-  using RateCallback = std::function<void(double bitrate_bps, double framerate_fps)>;
-  using ResolutionCallback = std::function<void(int width, int height)>;
-
-  // Callback setters
-  void SetStatsCallback(StatsCallback callback) { stats_callback_ = callback; }
-  void SetRateCallback(RateCallback callback) { rate_callback_ = callback; }
-  void SetResolutionCallback(ResolutionCallback callback) { resolution_callback_ = callback; }
 
   Conductor(PeerConnectionClient* client, MainWindow* main_wnd);
 
@@ -230,21 +196,19 @@ class Conductor : public webrtc::PeerConnectionObserver,
   std::string y4m_path_;
   std::string log_dir_;
 
-  // Stats
+  void StopStats ();
   void GetReceiverVideoStats();
-  void OnStatsDelivered(const rtc::scoped_refptr<const webrtc::RTCStatsReport>& report);
-  std::ofstream stats_file_;
-  int64_t last_stats_log_ms_ = 0;
-  static constexpr int kStatsIntervalMs = 1000;  // Log stats every second
 
-  bool stats_collection_started_ = false;
-  void StartPeriodicStatCollection();
-  void OnPeriodicStats();
+  std::unique_ptr<RTCStatsCollector> stats_collector_;
 
-  // Callback members
-  StatsCallback stats_callback_;
-  RateCallback rate_callback_;
-  ResolutionCallback resolution_callback_;
+  using StatsCallback = std::function<void(StatsType type, const std::string& message)>;
+using RateCallback = std::function<void(double bitrate_bps, double framerate_fps)>;
+using ResolutionCallback = std::function<void(int width, int height)>;
+
+StatsCallback stats_callback_;
+RateCallback rate_callback_;
+ResolutionCallback resolution_callback_;
+
 };
 
 #endif  // EXAMPLES_PEERCONNECTION_CLIENT_CONDUCTOR_H_

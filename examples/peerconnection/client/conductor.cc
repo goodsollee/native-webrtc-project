@@ -220,7 +220,8 @@ private:
 bool Conductor::curl_initialized_ = false;
 
 Conductor::Conductor(PeerConnectionClient* client, MainWindow* main_wnd)
-    : peer_id_(-1), loopback_(false), client_(client), main_wnd_(main_wnd), curl_(nullptr) {
+    : peer_id_(-1), loopback_(false), client_(client), main_wnd_(main_wnd), curl_(nullptr), 
+      stats_collector_(nullptr) {
   client_->RegisterObserver(this);
   main_wnd->RegisterObserver(this);
 }
@@ -441,8 +442,7 @@ bool Conductor::CreatePeerConnection() {
 
 
 void Conductor::DeletePeerConnection() {
-  // Stop stats collection
-  stats_collection_started_ = false;
+  stats_collector_->Stop();
   
   main_wnd_->StopLocalRenderer();
   main_wnd_->StopRemoteRenderer();
@@ -471,17 +471,41 @@ void Conductor::EnsureStreamingUI() {
 
 void Conductor::OnAddTrack(
     rtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver,
-    const std::vector<rtc::scoped_refptr<webrtc::MediaStreamInterface>>&
-        streams) {
-  RTC_LOG(LS_INFO) << __FUNCTION__ << " " << receiver->id();
-  main_wnd_->QueueUIThreadCallback(NEW_TRACK_ADDED,
+    const std::vector<rtc::scoped_refptr<webrtc::MediaStreamInterface>>& streams) {
+    
+    RTC_LOG(LS_INFO) << __FUNCTION__ << " " << receiver->id();
+    main_wnd_->QueueUIThreadCallback(NEW_TRACK_ADDED,
                                    receiver->track().release());
+
+    // If this is a video track, start stats collection
+    if (receiver->track() &&
+        receiver->track()->kind() == webrtc::MediaStreamTrackInterface::kVideoKind) {
+        GetReceiverVideoStats();
+    }
 }
 
 void Conductor::OnRemoveTrack(
     rtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver) {
-  RTC_LOG(LS_INFO) << __FUNCTION__ << " " << receiver->id();
-  main_wnd_->QueueUIThreadCallback(TRACK_REMOVED, receiver->track().release());
+    
+    RTC_LOG(LS_INFO) << __FUNCTION__ << " " << receiver->id();
+    main_wnd_->QueueUIThreadCallback(TRACK_REMOVED, receiver->track().release());
+
+    // If this was the last video track, stop stats
+    bool has_video_tracks = false;
+    if (peer_connection_) {
+        auto receivers = peer_connection_->GetReceivers();
+        for (const auto& r : receivers) {
+            if (r->track() && 
+                r->track()->kind() == webrtc::MediaStreamTrackInterface::kVideoKind) {
+                has_video_tracks = true;
+                break;
+            }
+        }
+    }
+
+    if (!has_video_tracks) {  
+      //stats_collector_->Stop();
+    }
 }
 
 void Conductor::OnIceCandidate(const webrtc::IceCandidateInterface* candidate) {
@@ -1214,9 +1238,6 @@ void Conductor::UIThreadCallback(int msg_id, void* data) {
       auto* track = reinterpret_cast<webrtc::MediaStreamTrackInterface*>(data);
       if (track->kind() == webrtc::MediaStreamTrackInterface::kVideoKind) {
         auto* video_track = static_cast<webrtc::VideoTrackInterface*>(track);
-
-        GetReceiverVideoStats();
-
         // Add renderer sink as usual
         main_wnd_->StartRemoteRenderer(video_track);
       }
@@ -1361,197 +1382,25 @@ void Conductor::SendMessage(const std::string& json_object) {
   }
 }
 
-
-
-
-// In conductor.cpp:
-void RTCStatsCollectorCallbackImpl::OnStatsDelivered(
-    const rtc::scoped_refptr<const webrtc::RTCStatsReport>& report) {
-  signaling_thread_->PostTask([this, report]() {
-    OnStatsDeliveredOnSignalingThread(report);
-  });
-}
-
-void RTCStatsCollectorCallbackImpl::OnStatsDeliveredOnSignalingThread(
-    rtc::scoped_refptr<const webrtc::RTCStatsReport> report) {
-  RTC_DCHECK(signaling_thread_->IsCurrent());
-  
-  RTC_LOG(LS_INFO) << "Stats callback triggered at time: " << rtc::TimeMillis();
-
-  if (!report) {
-    RTC_LOG(LS_ERROR) << "Null stats report received";
-    return;
-  }
-
-  RTC_LOG(LS_INFO) << "Processing stats report with timestamp: " << report->timestamp().ms();
-  
-  int stats_count = 0;
-  for (const auto& stats : *report) {
-    stats_count++;
-    RTC_LOG(LS_INFO) << "Found stat of type: " << stats.type();
-
-    if (std::string(stats.type()) != "inbound-rtp") {
-      continue;
-    }
-
-    RTC_LOG(LS_INFO) << "Processing inbound-rtp stat";
-    std::vector<webrtc::Attribute> attributes = stats.Attributes();
-    RTC_LOG(LS_INFO) << "Found " << attributes.size() << " attributes";
-
-    // Helper function to find attribute by name
-    auto find_attribute = [&attributes](const std::string& name) -> const webrtc::Attribute* {
-      for (const auto& attribute : attributes) {
-        if (attribute.name() == name) {
-          RTC_LOG(LS_INFO) << "Found attribute " << name << " = " << attribute.ToString();
-          return &attribute;
-        }
-      }
-      RTC_LOG(LS_WARNING) << "Attribute not found: " << name;
-      return nullptr;
-    };
-
-    const auto* kind_attr = find_attribute("kind");
-    if (!kind_attr) {
-      RTC_LOG(LS_WARNING) << "No 'kind' attribute found";
-      continue;
-    }
-    
-    RTC_LOG(LS_INFO) << "Track kind: " << kind_attr->ToString();
-    
-    if (kind_attr->ToString() != "video") {
-      RTC_LOG(LS_INFO) << "Skipping non-video track";
-      continue;
-    }
-
-    // Get timestamp in milliseconds
-    int64_t timestamp_ms = report->timestamp().ms();
-
-    // Helper function to get numeric values safely without exceptions
-    auto get_numeric = [&find_attribute](const std::string& name, double default_value = 0) -> double {
-      const auto* attr = find_attribute(name);
-      if (!attr) return default_value;
-      const std::string& value_str = attr->ToString();
-      char* end;
-      double value = std::strtod(value_str.c_str(), &end);
-      if (end == value_str.c_str()) {
-        RTC_LOG(LS_WARNING) << "Failed to convert value for " << name << ": " << value_str;
-        return default_value;
-      }
-      RTC_LOG(LS_INFO) << "Got numeric value for " << name << ": " << value;
-      return value;
-    };
-
-    // Extract all stats
-    int64_t frames_decoded = static_cast<int64_t>(get_numeric("framesDecoded"));
-    int64_t frames_dropped = static_cast<int64_t>(get_numeric("framesDropped"));
-    int64_t frames_received = static_cast<int64_t>(get_numeric("framesReceived"));
-    double framerate = get_numeric("framesPerSecond");
-    double jitter_buffer_delay = get_numeric("jitterBufferDelay") * 1000.0;  // Convert to ms
-    int64_t width = static_cast<int64_t>(get_numeric("frameWidth"));
-    int64_t height = static_cast<int64_t>(get_numeric("frameHeight"));
-    double total_decode_time = get_numeric("totalDecodeTime") * 1000.0;  // Convert to ms
-    int64_t packets_received = static_cast<int64_t>(get_numeric("packetsReceived"));
-    
-    const auto* decoder_impl_attr = find_attribute("decoderImplementation");
-    std::string decoder_implementation = 
-        decoder_impl_attr ? decoder_impl_attr->ToString() : "unknown";
-
-    RTC_LOG(LS_INFO) << "Writing stats to file";
-    
-    // Write stats to file
-    stats_file_ << timestamp_ms << ","
-                << frames_decoded << ","
-                << frames_dropped << ","
-                << frames_received << ","
-                << framerate << ","
-                << jitter_buffer_delay << ","
-                << width << ","
-                << height << ","
-                << total_decode_time << ","
-                << packets_received << ","
-                << decoder_implementation << "\n";
-
-    // Force flush the file
-    stats_file_.flush();
-
-    RTC_LOG(LS_INFO) << "Video Receiver Stats:"
-                     << " Framerate: " << framerate
-                     << " fps, Resolution: " << width << "x" << height
-                     << ", Frames decoded: " << frames_decoded
-                     << ", Frames dropped: " << frames_dropped;
-  }
-
-  RTC_LOG(LS_INFO) << "Processed " << stats_count << " total stats";
-}
-void Conductor::StartPeriodicStatCollection(std::shared_ptr<Conductor> self) {
-  if (stats_collection_started_) {
-    return;
-  }
-
-  RTC_LOG(LS_INFO) << "Starting periodic stats collection with interval: "
-                   << kStatsIntervalMs << "ms";
-
-  stats_collection_started_ = true;
-
-  // Capture `self` instead of using shared_from_this().
-  // Just ensure `self` is passed from the outside.
-  OnPeriodicStats(self);
-}
-
-void Conductor::OnPeriodicStats(std::shared_ptr<Conductor> self) {
-  // Use a weak pointer if you need to break the cycle:
-  std::weak_ptr<Conductor> weak_this = self;
-
-  signaling_thread_->PostDelayedTask([weak_this]() {
-    auto strong_this = weak_this.lock();
-    if (!strong_this) {
-      // The Conductor object no longer exists
-      return;
-    }
-
-    if (!strong_this->peer_connection_ || !strong_this->stats_collection_started_) {
-      strong_this->stats_collection_started_ = false;
-      return;
-    }
-
-    RTC_LOG(LS_INFO) << "Collecting stats at: " << rtc::TimeMillis();
-
-    auto stats_callback = rtc::make_ref_counted<RTCStatsCollectorCallbackImpl>(
-        strong_this->stats_file_, strong_this->signaling_thread_.get());
-    strong_this->peer_connection_->GetStats(stats_callback.get());
-
-    if (strong_this->stats_collection_started_) {
-      // Pass `strong_this` again for the next iteration
-      strong_this->OnPeriodicStats(strong_this);
-    }
-  }, webrtc::TimeDelta::Millis(kStatsIntervalMs));
-}
+// Replace old stats methods with new ones
 void Conductor::GetReceiverVideoStats() {
-  if (!peer_connection_) {
-    RTC_LOG(LS_WARNING) << "No peer connection when getting stats";
-    return;
-  }
-
-  // Open stats file if not already open
-  if (!stats_file_.is_open()) {
-    std::string filename = "receiver_video_stats.csv"; // adjust path as needed
-    RTC_LOG(LS_INFO) << "Opening stats file: " << filename;
-
-    stats_file_.open(filename);
-    if (!stats_file_.is_open()) {
-      RTC_LOG(LS_ERROR) << "Failed to open stats file: " << filename;
-      return;
+    if (!peer_connection_) {
+        RTC_LOG(LS_WARNING) << "No peer connection when getting stats";
+        return;
     }
 
-    // Write header only once when file is first opened
-    stats_file_ << "timestamp_ms,frames_decoded,frames_dropped,frames_received,"
-                << "framerate,jitter_buffer_delay_ms,video_width,video_height,"
-                << "total_decode_time_ms,packets_received,decoder_implementation\n";
-    stats_file_.flush();
-  }
+    // Create stats collector if it doesn't exist
+    if (!stats_collector_) {
+        stats_collector_ = std::make_unique<RTCStatsCollector>();
+    }
 
-  // Start periodic collection if not already started
-  if (!stats_collection_started_) {
-    StartPeriodicStatCollection();
-  }
+    // Start collection if not already running
+    if (!stats_collector_->IsRunning()) {
+        std::string filename = "receiver_video_stats.csv";
+        if (stats_collector_->Start(filename, peer_connection_)) {
+            RTC_LOG(LS_INFO) << "Started stats collection to " << filename;
+        } else {
+            RTC_LOG(LS_ERROR) << "Failed to start stats collection";
+        }
+    }
 }

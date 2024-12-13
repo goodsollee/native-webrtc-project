@@ -49,6 +49,7 @@
 #include "api/video_codecs/video_encoder_factory_template_libvpx_vp8_adapter.h"
 #include "api/video_codecs/video_encoder_factory_template_libvpx_vp9_adapter.h"
 #include "api/video_codecs/video_encoder_factory_template_open_h264_adapter.h"
+#include "api/video/video_timing.h"
 #include "examples/peerconnection/client/defaults.h"
 #include "examples/peerconnection/client/main_wnd.h"
 #include "examples/peerconnection/client/peer_connection_client.h"
@@ -67,7 +68,7 @@
 #include "test/test_video_capturer.h"
 #include "test/testsupport/y4m_frame_generator.h"
 
-#include <cstdlib>
+#include <stdlib.h>  // C-style header instead of <cstdlib>
 #include <ctime>
 
 namespace {
@@ -160,6 +161,61 @@ class Y4mVideoSource : public webrtc::VideoTrackSource {
  private:
   std::unique_ptr<webrtc::test::FrameGeneratorCapturer> capturer_;
 };
+
+
+
+/*
+// Create timing logger sink
+class TimingInfoLogger : public VCMReceiveCallback {
+public:
+  explicit TimingInfoLogger(const std::string& log_dir) {
+    std::string log_path = log_dir + "/frame_timing.csv";
+    log_file_.open(log_path);
+    if (log_file_.is_open()) {
+      log_file_ << "system_time,frame_index,frame_count" 
+                << "capture_to_encode_delay,encode_delay,"
+                << "pacer_delay,network_delay,"
+                << "receive_delay,jitter_delay,decode_delay,"
+                << "total_delay\n";
+    }
+    frame_count_ = 0;
+    first_rtp_timestamp_ = 0;
+  }
+
+  void OnFrameToRender(const VideoFrame& frame) {
+    const webrtc::TimingFrameInfo& timing = _timing->GetTimingFrameInfo();
+    if (timing.flags != webrtc::VideoSendTiming::kInvalid) {
+      int64_t now = rtc::TimeMillis();
+
+      // Calculate frame index using RTP timestamp
+      uint32_t rtp_timestamp = frame.timestamp_us();
+      if (first_rtp_timestamp_ == 0) {
+        first_rtp_timestamp_ = rtp_timestamp;
+      }
+      
+      // Using same calculation as your original code
+      uint32_t frame_index = (rtp_timestamp - first_rtp_timestamp_) / 90 / 16; // 16ms per frame at 60fps
+      
+      log_file_ << now << ","
+                << frame_index << ","
+                << _++ << ","
+                << (timing.encode_start_ms - timing.capture_time_ms) << ","
+                << (timing.encode_finish_ms - timing.encode_start_ms) << ","
+                << (timing.pacer_exit_ms - timing.encode_finish_ms) << ","
+                << (timing.network_timestamp_ms - timing.pacer_exit_ms) << ","
+                << (timing.receive_finish_ms - timing.receive_start_ms) << ","
+                << (timing.decode_start_ms - timing.receive_finish_ms) << ","
+                << (timing.decode_finish_ms - timing.decode_start_ms) << ","
+                << (timing.decode_finish_ms - timing.capture_time_ms) << "\n";
+    }
+  }
+
+private:
+  std::ofstream log_file_;
+  uint32_t frame_count_;
+  uint32_t first_rtp_timestamp_ ;  // To calculate relative frame indices
+};
+*/
 
 bool Conductor::curl_initialized_ = false;
 
@@ -354,6 +410,7 @@ bool Conductor::CreatePeerConnection() {
   config.bundle_policy = webrtc::PeerConnectionInterface::kBundlePolicyMaxBundle;
   config.rtcp_mux_policy = webrtc::PeerConnectionInterface::kRtcpMuxPolicyRequire;
 
+
   // Setup proper ICE connection timeouts
   config.ice_connection_receiving_timeout = 5000;  // 5 seconds
   config.ice_backup_candidate_pair_ping_interval = 5000; // 5 seconds
@@ -381,6 +438,7 @@ bool Conductor::CreatePeerConnection() {
   }
   return peer_connection_ != nullptr;
 }
+
 
 void Conductor::DeletePeerConnection() {
   main_wnd_->StopLocalRenderer();
@@ -888,6 +946,18 @@ void Conductor::AddTracks() {
     return;  // Already added tracks.
   }
 
+  rtc::scoped_refptr<webrtc::AudioTrackInterface> audio_track(
+      peer_connection_factory_->CreateAudioTrack(
+          kAudioLabel,
+          peer_connection_factory_->CreateAudioSource(cricket::AudioOptions())
+              .get()));
+  auto result_or_error = peer_connection_->AddTrack(audio_track, {kStreamId});
+  if (!result_or_error.ok()) {
+    RTC_LOG(LS_ERROR) << "Failed to add audio track to PeerConnection: "
+                      << result_or_error.error().message();
+  }
+
+
   // If we're in receiver-only mode, don't add any local tracks
   if (!is_sender_) {
     RTC_LOG(LS_INFO) << "Operating in receiver-only mode";
@@ -896,6 +966,39 @@ void Conductor::AddTracks() {
   }
 
   bool use_camera = true;
+
+  // Before adding any tracks, create transceiver with RTP extensions configured
+  webrtc::RtpTransceiverInit init;
+  init.direction = webrtc::RtpTransceiverDirection::kSendRecv;
+  init.stream_ids.push_back(kStreamId);
+
+  // Add transceiver first to configure extensions
+  auto transceiver_result = peer_connection_->AddTransceiver(
+      cricket::MEDIA_TYPE_VIDEO,
+      init);
+
+  if (transceiver_result.ok()) {
+    auto transceiver = transceiver_result.value();
+    
+    // Get and modify extensions
+    auto extensions = transceiver->GetHeaderExtensionsToNegotiate();
+
+    for (auto& ext : extensions) {
+      // Enable timing-related extensions
+      if (ext.uri == webrtc::RtpExtension::kAbsoluteCaptureTimeUri ||
+          ext.uri == webrtc::RtpExtension::kVideoTimingUri ||
+          ext.uri == webrtc::RtpExtension::kTimestampOffsetUri) {
+        ext.direction = webrtc::RtpTransceiverDirection::kSendRecv;
+      }
+    }
+
+    // Set modified extensions
+    auto error = transceiver->SetHeaderExtensionsToNegotiate(extensions);
+    if (!error.ok()) {
+      RTC_LOG(LS_ERROR) << "Failed to set header extensions: " 
+                      << error.message();
+    }
+  }
 
   // Try Y4M first if path is provided
   if (!y4m_path_.empty()) {
@@ -1107,6 +1210,8 @@ void Conductor::UIThreadCallback(int msg_id, void* data) {
       auto* track = reinterpret_cast<webrtc::MediaStreamTrackInterface*>(data);
       if (track->kind() == webrtc::MediaStreamTrackInterface::kVideoKind) {
         auto* video_track = static_cast<webrtc::VideoTrackInterface*>(track);
+
+        // Add renderer sink as usual
         main_wnd_->StartRemoteRenderer(video_track);
       }
       track->Release();

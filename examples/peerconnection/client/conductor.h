@@ -11,6 +11,7 @@
 #ifndef EXAMPLES_PEERCONNECTION_CLIENT_CONDUCTOR_H_
 #define EXAMPLES_PEERCONNECTION_CLIENT_CONDUCTOR_H_
 
+#include <fstream>
 #include <deque>
 #include <memory>
 #include <string>
@@ -52,6 +53,25 @@ class Conductor : public webrtc::PeerConnectionObserver,
     NEW_TRACK_ADDED,
     TRACK_REMOVED,
   };
+
+  // Stats callback types
+  enum StatsType {
+    STATS_CONNECTING,      // ICE connection state changes
+    STATS_CONNECTED,       // When peer connection is established
+    STATS_DISCONNECTED,    // When peer connection is closed
+    STATS_RATE_UPDATED,    // Bitrate/framerate updates
+    STATS_ERROR           // Any errors during stats collection
+  };
+
+  // Callback function type definitions
+  using StatsCallback = std::function<void(StatsType type, const std::string& message)>;
+  using RateCallback = std::function<void(double bitrate_bps, double framerate_fps)>;
+  using ResolutionCallback = std::function<void(int width, int height)>;
+
+  // Callback setters
+  void SetStatsCallback(StatsCallback callback) { stats_callback_ = callback; }
+  void SetRateCallback(RateCallback callback) { rate_callback_ = callback; }
+  void SetResolutionCallback(ResolutionCallback callback) { resolution_callback_ = callback; }
 
   Conductor(PeerConnectionClient* client, MainWindow* main_wnd);
 
@@ -183,7 +203,11 @@ class Conductor : public webrtc::PeerConnectionObserver,
   bool is_sender_ = true;
   std::string y4m_path_;
   std::string log_dir_;
-  
+
+  // Callback members
+  StatsCallback stats_callback_;
+  RateCallback rate_callback_;
+  ResolutionCallback resolution_callback_;
 };
 
 #endif  // EXAMPLES_PEERCONNECTION_CLIENT_CONDUCTOR_H_

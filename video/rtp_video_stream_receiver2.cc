@@ -988,7 +988,8 @@ void RtpVideoStreamReceiver2::SetRtcpMode(RtcpMode mode) {
 
 void RtpVideoStreamReceiver2::SetReferenceTimeReport(bool enabled) {
   RTC_DCHECK_RUN_ON(&packet_sequence_checker_);
-  rtp_rtcp_->SetNonSenderRttMeasurement(enabled);
+  RTC_LOG(LS_INFO) << "SetReferenceTimeReport: " << enabled;
+  rtp_rtcp_->SetNonSenderRttMeasurement(true);
 }
 
 void RtpVideoStreamReceiver2::SetPacketSink(
@@ -1190,7 +1191,10 @@ bool RtpVideoStreamReceiver2::DeliverRtcp(const uint8_t* rtcp_packet,
                                           size_t rtcp_packet_length) {
   RTC_DCHECK_RUN_ON(&packet_sequence_checker_);
 
+  RTC_LOG(LS_INFO) << "DeliverRtcp: Received RTCP packet of length " << rtcp_packet_length;
+  
   if (!receiving_) {
+    RTC_LOG(LS_WARNING) << "DeliverRtcp: Not receiving, dropping RTCP packet";
     return false;
   }
 
@@ -1199,28 +1203,44 @@ bool RtpVideoStreamReceiver2::DeliverRtcp(const uint8_t* rtcp_packet,
 
   std::optional<TimeDelta> rtt = rtp_rtcp_->LastRtt();
   if (!rtt.has_value()) {
-    // Waiting for valid rtt.
+    RTC_LOG(LS_INFO) << "DeliverRtcp: Waiting for valid RTT";
     return true;
   }
+  RTC_LOG(LS_INFO) << "DeliverRtcp: Current RTT: " << rtt->ms() << "ms";
 
   std::optional<RtpRtcpInterface::SenderReportStats> last_sr =
       rtp_rtcp_->GetSenderReportStats();
   if (!last_sr.has_value()) {
-    // Waiting for RTCP.
+    RTC_LOG(LS_INFO) << "DeliverRtcp: Waiting for Sender Report";
     return true;
   }
+
   int64_t time_since_received = env_.clock().CurrentNtpInMilliseconds() -
                                 last_sr->last_arrival_ntp_timestamp.ToMs();
-  // Don't use old SRs to estimate time.
+  
+  RTC_LOG(LS_INFO) << "DeliverRtcp: Time since SR: " << time_since_received << "ms"
+                   << ", Last arrival timestamp: " << last_sr->last_arrival_ntp_timestamp.ToMs() << "ms"
+                   << ", Current NTP: " << env_.clock().CurrentNtpInMilliseconds() << "ms";
+
   if (time_since_received <= 1) {
+    RTC_LOG(LS_INFO) << "DeliverRtcp: Updating RTCP timestamp with RTT: " << rtt->ms() 
+                     << "ms, Remote RTP: " << last_sr->last_remote_rtp_timestamp;
+
     ntp_estimator_.UpdateRtcpTimestamp(*rtt, last_sr->last_remote_ntp_timestamp,
                                        last_sr->last_remote_rtp_timestamp);
+    
     std::optional<int64_t> remote_to_local_clock_offset =
         ntp_estimator_.EstimateRemoteToLocalClockOffset();
     if (remote_to_local_clock_offset.has_value()) {
+      RTC_LOG(LS_INFO) << "DeliverRtcp: Updated clock offset: " 
+                       << *remote_to_local_clock_offset << "ms";
       capture_clock_offset_updater_.SetRemoteToLocalClockOffset(
           *remote_to_local_clock_offset);
+    } else {
+      RTC_LOG(LS_INFO) << "DeliverRtcp: No clock offset available";
     }
+  } else {
+    RTC_LOG(LS_INFO) << "DeliverRtcp: Skipping timestamp update, SR too old";
   }
 
   return true;

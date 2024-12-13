@@ -20,6 +20,7 @@
 #include "api/video/video_timing.h"
 #include "common_video/frame_instrumentation_data.h"
 #include "rtc_base/checks.h"
+#include "rtc_base/logging.h"
 
 namespace webrtc {
 RtpFrameObject::RtpFrameObject(

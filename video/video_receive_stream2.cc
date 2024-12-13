@@ -502,7 +502,7 @@ void VideoReceiveStream2::SetProtectionPayloadTypes(int red_payload_type,
 void VideoReceiveStream2::SetRtcpXr(Config::Rtp::RtcpXr rtcp_xr) {
   RTC_DCHECK_RUN_ON(&packet_sequence_checker_);
   rtp_video_stream_receiver_.SetReferenceTimeReport(
-      rtcp_xr.receiver_reference_time_report);
+      true);
 }
 
 void VideoReceiveStream2::SetAssociatedPayloadTypes(

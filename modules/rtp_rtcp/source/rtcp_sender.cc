@@ -176,8 +176,9 @@ RTCPSender::RTCPSender(const Environment& env, Configuration config)
       packet_oh_send_(0),
       max_packet_size_(IP_PACKET_SIZE - 28),  // IPv4 + UDP by default.
 
-      xr_send_receiver_reference_time_enabled_(
-          config.non_sender_rtt_measurement),
+      //xr_send_receiver_reference_time_enabled_(
+      //    config.non_sender_rtt_measurement),
+      xr_send_receiver_reference_time_enabled_(true),
       packet_type_counter_observer_(config.rtcp_packet_type_counter_observer),
       send_video_bitrate_allocation_(false),
       last_payload_type_(-1) {
@@ -229,7 +230,7 @@ void RTCPSender::SetSendingStatus(const FeedbackState& /* feedback_state */,
 
 void RTCPSender::SetNonSenderRttMeasurement(bool enabled) {
   MutexLock lock(&mutex_rtcp_sender_);
-  xr_send_receiver_reference_time_enabled_ = enabled;
+  xr_send_receiver_reference_time_enabled_ = true;
 }
 
 int32_t RTCPSender::SendLossNotification(const FeedbackState& feedback_state,
@@ -751,6 +752,7 @@ void RTCPSender::PrepareReport(const FeedbackState& feedback_state) {
   if (IsFlagPresent(kRtcpSr) || (IsFlagPresent(kRtcpRr) && !cname_.empty()))
     SetFlag(kRtcpSdes, true);
 
+  SetFlag(kRtcpAnyExtendedReports, true);
   if (generate_report) {
     if ((!sending_ && xr_send_receiver_reference_time_enabled_) ||
         !feedback_state.last_xr_rtis.empty() ||

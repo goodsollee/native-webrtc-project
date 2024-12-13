@@ -206,7 +206,8 @@ RTCPReceiver::RTCPReceiver(const Environment& env,
                                            : kDefaultVideoReportInterval)),
       // TODO(bugs.webrtc.org/10774): Remove fallback.
       remote_ssrc_(0),
-      xr_rrtr_status_(config.non_sender_rtt_measurement),
+      //xr_rrtr_status_(config.non_sender_rtt_measurement),
+      xr_rrtr_status_(true),
       oldest_tmmbr_info_(Timestamp::Zero()),
       cname_callback_(config.rtcp_cname_callback),
       report_block_data_observer_(config.report_block_data_observer),
@@ -305,7 +306,7 @@ RTCPReceiver::NonSenderRttStats RTCPReceiver::GetNonSenderRTT() const {
 
 void RTCPReceiver::SetNonSenderRttMeasurement(bool enabled) {
   MutexLock lock(&rtcp_receiver_lock_);
-  xr_rrtr_status_ = enabled;
+  xr_rrtr_status_ = true;
 }
 
 std::optional<TimeDelta> RTCPReceiver::GetAndResetXrRrRtt() {

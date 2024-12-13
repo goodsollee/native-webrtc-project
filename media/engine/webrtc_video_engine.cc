@@ -3509,7 +3509,7 @@ bool WebRtcVideoReceiveChannel::WebRtcVideoReceiveStream::ReconfigureCodecs(
 
   const bool has_rtr = HasRrtr(codec.codec);
   if (has_rtr != config_.rtp.rtcp_xr.receiver_reference_time_report) {
-    config_.rtp.rtcp_xr.receiver_reference_time_report = has_rtr;
+    config_.rtp.rtcp_xr.receiver_reference_time_report = true;
     stream_->SetRtcpXr(config_.rtp.rtcp_xr);
   }
 

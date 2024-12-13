@@ -49,8 +49,7 @@ VCMDecodedFrameCallback::VCMDecodedFrameCallback(
     : _clock(clock),
       _timing(timing),
       corruption_score_calculator_(corruption_score_calculator) {
-  ntp_offset_ =
-      _clock->CurrentNtpInMilliseconds() - _clock->TimeInMilliseconds();
+  ntp_offset_ = _clock->CurrentNtpInMilliseconds() - _clock->TimeInMilliseconds();
 }
 
 VCMDecodedFrameCallback::~VCMDecodedFrameCallback() {}
@@ -234,6 +233,10 @@ void VCMDecodedFrameCallback::Decoded(VideoFrame& decodedImage,
       "WebRTC.Video.GenericDecoder.DecodeDelay",
       timing_frame_info.decode_finish_ms - timing_frame_info.decode_start_ms);
   _timing->SetTimingFrameInfo(timing_frame_info);
+
+
+  RTC_LOG(LS_INFO) << "googTimingFrameInfo: " 
+                    << timing_frame_info.ToString();
 
   decodedImage.set_timestamp_us(
       frame_info->render_time ? frame_info->render_time->us() : -1);

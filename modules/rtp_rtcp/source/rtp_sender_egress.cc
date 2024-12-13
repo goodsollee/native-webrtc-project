@@ -113,6 +113,7 @@ RtpSenderEgress::RtpSenderEgress(const Environment& env,
       flexfec_ssrc_(config.fec_generator ? config.fec_generator->FecSsrc()
                                          : std::nullopt),
       populate_network2_timestamp_(config.populate_network2_timestamp),
+      //populate_network2_timestamp_(true),
       packet_history_(packet_history),
       transport_(config.outgoing_transport),
       is_audio_(config.audio),
@@ -249,6 +250,7 @@ void RtpSenderEgress::SendPacket(std::unique_ptr<RtpPacketToSend> packet,
     if (populate_network2_timestamp_) {
       packet->set_network2_time(now);
     } else {
+      RTC_LOG(LS_INFO)<< "VideoTimingExtension is supported in RtpSenderEgress. " << now;
       packet->set_pacer_exit_time(now);
     }
   }

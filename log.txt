@@ -1,3 +1,227 @@
-ninja: Entering directory `out/Default'
-[1/4] CXX obj/examples/peerconnection_client/websocket_client.o
-ninja: build stopped: interrupted by user.
+ninja: Entering directory `out/Default/'
+[1/2] CXX obj/examples/peerconnection_client/conductor.o
+FAILED: obj/examples/peerconnection_client/conductor.o 
+../../third_party/llvm-build/Release+Asserts/bin/clang++ -MMD -MF obj/examples/peerconnection_client/conductor.o.d -DUSE_UDEV -DUSE_AURA=1 -DUSE_GLIB=1 -DUSE_OZONE=1 -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_GNU_SOURCE -DCR_CLANG_REVISION=\"llvmorg-20-init-6794-g3dbd929e-1\" -D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_EXTENSIVE -D_LIBCPP_DISABLE_VISIBILITY_ANNOTATIONS -D_LIBCXXABI_DISABLE_VISIBILITY_ANNOTATIONS -DCR_LIBCXX_REVISION=6a68fd412b9aecd515a20a7cf84d11b598bfaf96 -DTMP_REBUILD_HACK -DCR_SYSROOT_KEY=20230611T210420Z-2 -D_DEBUG -DDYNAMIC_ANNOTATIONS_ENABLED=1 -DWEBRTC_ENABLE_PROTOBUF=1 -DWEBRTC_STRICT_FIELD_TRIALS=0 -DWEBRTC_INCLUDE_INTERNAL_AUDIO_DEVICE -DRTC_ENABLE_VP9 -DRTC_DAV1D_IN_INTERNAL_DECODER_FACTORY -DWEBRTC_HAVE_SCTP -DWEBRTC_ENABLE_AVX2 -DWEBRTC_NON_STATIC_TRACE_EVENT_HANDLERS=1 -DWEBRTC_POSIX -DWEBRTC_LINUX -DABSL_ALLOCATOR_NOTHROW=1 -DABSL_FLAGS_STRIP_NAMES=0 -DCHROMIUM -DLIBYUV_DISABLE_NEON -DLIBYUV_DISABLE_SVE -DLIBYUV_DISABLE_SME -DLIBYUV_DISABLE_LSX -DLIBYUV_DISABLE_LASX -DGTEST_API_= -DGTEST_HAS_POSIX_RE=0 -DGTEST_LANG_CXX11=1 -DGTEST_HAS_TR1_TUPLE=0 -DGTEST_HAS_ABSL -DGTEST_NO_ABSL_FLAGS -DWEBRTC_UNIT_TEST -DHAVE_WEBRTC_VIDEO -I../.. -Igen -I../../buildtools/third_party/libc++ -I/usr/local/include -I../../third_party/abseil-cpp -I../../third_party/libyuv/include -I../../third_party/perfetto/include -Igen/third_party/perfetto/build_config -Igen/third_party/perfetto -I../../third_party/googletest/custom -I../../third_party/googletest/src/googlemock/include -I../../third_party/googletest/src/googletest/include -I../../third_party/re2/src -I../../third_party/jsoncpp/source/include -Wno-deprecated-declarations -Wall -Wextra -Wimplicit-fallthrough -Wextra-semi -Wunreachable-code-aggressive -Wthread-safety -Wno-missing-field-initializers -Wno-unused-parameter -Wno-psabi -Wloop-analysis -Wno-unneeded-internal-declaration -Wno-cast-function-type -Wno-thread-safety-reference-return -Wshadow -Werror -fno-delete-null-pointer-checks -fno-ident -fno-strict-aliasing -fstack-protector -funwind-tables -fPIC -pthread -fcolor-diagnostics -fmerge-all-constants -fno-sized-deallocation -fcrash-diagnostics-dir=../../tools/clang/crashreports -mllvm -instcombine-lower-dbg-declare=0 -mllvm -split-threshold-for-reg-with-hint=0 -ffp-contract=off -fcomplete-member-pointers -m64 -msse3 -Wno-builtin-macro-redefined -D__DATE__= -D__TIME__= -D__TIMESTAMP__= -ffile-compilation-dir=. -no-canonical-prefixes -ftrivial-auto-var-init=pattern -O0 -fno-omit-frame-pointer -gdwarf-4 -g2 -gdwarf-aranges -gsplit-dwarf -ggnu-pubnames -Xclang -fuse-ctor-homing -fvisibility=hidden -Wheader-hygiene -Wstring-conversion -Wtautological-overlap-compare -Wno-shadow -Wctad-maybe-unsupported -Wc++11-narrowing -Wundef -Wunused-lambda-capture -isystem../../build/linux/debian_bullseye_amd64-sysroot/usr/include/glib-2.0 -isystem../../build/linux/debian_bullseye_amd64-sysroot/usr/lib/x86_64-linux-gnu/glib-2.0/include -isystem../../build/linux/debian_bullseye_amd64-sysroot/usr/include/gtk-3.0 -isystem../../build/linux/debian_bullseye_amd64-sysroot/usr/include/pango-1.0 -isystem../../build/linux/debian_bullseye_amd64-sysroot/usr/include/harfbuzz -isystem../../build/linux/debian_bullseye_amd64-sysroot/usr/include/freetype2 -isystem../../build/linux/debian_bullseye_amd64-sysroot/usr/include/libpng16 -isystem../../build/linux/debian_bullseye_amd64-sysroot/usr/include/libmount -isystem../../build/linux/debian_bullseye_amd64-sysroot/usr/include/blkid -isystem../../build/linux/debian_bullseye_amd64-sysroot/usr/include/fribidi -isystem../../build/linux/debian_bullseye_amd64-sysroot/usr/include/uuid -isystem../../build/linux/debian_bullseye_amd64-sysroot/usr/include/cairo -isystem../../build/linux/debian_bullseye_amd64-sysroot/usr/include/pixman-1 -isystem../../build/linux/debian_bullseye_amd64-sysroot/usr/include/gdk-pixbuf-2.0 -isystem../../build/linux/debian_bullseye_amd64-sysroot/usr/include/gio-unix-2.0 -isystem../../build/linux/debian_bullseye_amd64-sysroot/usr/include/atk-1.0 -isystem../../build/linux/debian_bullseye_amd64-sysroot/usr/include/at-spi2-atk/2.0 -isystem../../build/linux/debian_bullseye_amd64-sysroot/usr/include/dbus-1.0 -isystem../../build/linux/debian_bullseye_amd64-sysroot/usr/lib/x86_64-linux-gnu/dbus-1.0/include -isystem../../build/linux/debian_bullseye_amd64-sysroot/usr/include/at-spi-2.0 -Wno-inconsistent-missing-override -Wno-invalid-offsetof -Wenum-compare-conditional -Wno-c++11-narrowing-const-reference -Wno-missing-template-arg-list-after-template-kw -Wno-dangling-assignment-gsl -Wno-undefined-bool-conversion -Wno-tautological-undefined-compare -std=c++17 -Wno-trigraphs -gsimple-template-names -fno-exceptions -fno-rtti -nostdinc++ -isystem../../third_party/libc++/src/include -isystem../../third_party/libc++abi/src/include --sysroot=../../build/linux/debian_bullseye_amd64-sysroot -fvisibility-inlines-hidden -Wnon-virtual-dtor -Woverloaded-virtual -Wno-undef -c ../../examples/peerconnection/client/conductor.cc -o obj/examples/peerconnection_client/conductor.o
+../../examples/peerconnection/client/conductor.cc:464:10: error: no member named 'send_header_extensions' in 'webrtc::RtpTransceiverInit'
+  464 |     init.send_header_extensions = extensions;
+      |     ~~~~ ^
+../../examples/peerconnection/client/conductor.cc:465:10: error: no member named 'recv_header_extensions' in 'webrtc::RtpTransceiverInit'
+  465 |     init.recv_header_extensions = extensions;
+      |     ~~~~ ^
+../../examples/peerconnection/client/conductor.cc:490:5: error: use of undeclared identifier 'transceivers_'; did you mean 'transceiver'?
+  490 |     transceivers_.push_back(transceiver);
+      |     ^~~~~~~~~~~~~
+      |     transceiver
+../../examples/peerconnection/client/conductor.cc:478:10: note: 'transceiver' declared here
+  478 |     auto transceiver = result.value();
+      |          ^
+../../examples/peerconnection/client/conductor.cc:490:19: error: no member named 'push_back' in 'webrtc::scoped_refptr<webrtc::RtpTransceiverInterface>'
+  490 |     transceivers_.push_back(transceiver);
+      |     ~~~~~~~~~~~~~ ^
+In file included from ../../examples/peerconnection/client/conductor.cc:11:
+In file included from ../../examples/peerconnection/client/conductor.h:20:
+In file included from ../../api/data_channel_interface.h:26:
+In file included from ../../api/rtc_error.h:22:
+../../rtc_base/logging.h:355:6: error: invalid operands to binary expression ('std::ostringstream' (aka 'basic_ostringstream<char>') and 'const std::optional<int>')
+  355 |   os << x;
+      |   ~~ ^  ~
+../../rtc_base/logging.h:397:37: note: in instantiation of function template specialization 'rtc::webrtc_logging_impl::MakeVal<std::optional<int>, std::optional<int>, nullptr>' requested here
+  397 |     return LogStreamer<V, T, Ts...>(MakeVal(arg), this);
+      |                                     ^
+../../examples/peerconnection/client/conductor.cc:485:34: note: in instantiation of function template specialization 'rtc::webrtc_logging_impl::LogStreamer<rtc::webrtc_logging_impl::Val<rtc::webrtc_logging_impl::LogArgType::kCharP, const char *>, rtc::webrtc_logging_impl::Val<rtc::webrtc_logging_impl::LogArgType::kStdString, const std::string *>, rtc::webrtc_logging_impl::Val<rtc::webrtc_logging_impl::LogArgType::kCharP, const char *>, rtc::webrtc_logging_impl::Val<rtc::webrtc_logging_impl::LogArgType::kLogMetadata, rtc::webrtc_logging_impl::LogMetadata>>::operator<<<std::optional<int>, rtc::webrtc_logging_impl::ToStringVal>' requested here
+  485 |                       << " ID: " << ext.preferred_id
+      |                                  ^
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:533:55: note: candidate function template not viable: no known conversion from 'const std::optional<int>' to 'char' for 2nd argument
+  533 | _LIBCPP_HIDE_FROM_ABI basic_ostream<_CharT, _Traits>& operator<<(basic_ostream<_CharT, _Traits>& __os, char __cn) {
+      |                                                       ^                                                ~~~~~~~~~
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:560:53: note: candidate function template not viable: no known conversion from 'const std::optional<int>' to 'char' for 2nd argument
+  560 | _LIBCPP_HIDE_FROM_ABI basic_ostream<char, _Traits>& operator<<(basic_ostream<char, _Traits>& __os, char __c) {
+      |                                                     ^                                              ~~~~~~~~
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:565:53: note: candidate function template not viable: no known conversion from 'const std::optional<int>' to 'signed char' for 2nd argument
+  565 | _LIBCPP_HIDE_FROM_ABI basic_ostream<char, _Traits>& operator<<(basic_ostream<char, _Traits>& __os, signed char __c) {
+      |                                                     ^                                              ~~~~~~~~~~~~~~~
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:570:53: note: candidate function template not viable: no known conversion from 'const std::optional<int>' to 'unsigned char' for 2nd argument
+  570 | _LIBCPP_HIDE_FROM_ABI basic_ostream<char, _Traits>& operator<<(basic_ostream<char, _Traits>& __os, unsigned char __c) {
+      |                                                     ^                                              ~~~~~~~~~~~~~~~~~
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:582:1: note: candidate function template not viable: no known conversion from 'const std::optional<int>' to 'const char *' for 2nd argument
+  582 | operator<<(basic_ostream<_CharT, _Traits>& __os, const char* __strn) {
+      | ^                                                ~~~~~~~~~~~~~~~~~~
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:621:53: note: candidate function template not viable: no known conversion from 'const std::optional<int>' to 'const char *' for 2nd argument
+  621 | _LIBCPP_HIDE_FROM_ABI basic_ostream<char, _Traits>& operator<<(basic_ostream<char, _Traits>& __os, const char* __str) {
+      |                                                     ^                                              ~~~~~~~~~~~~~~~~~
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:627:1: note: candidate function template not viable: no known conversion from 'const std::optional<int>' to 'const signed char *' for 2nd argument
+  627 | operator<<(basic_ostream<char, _Traits>& __os, const signed char* __str) {
+      | ^                                              ~~~~~~~~~~~~~~~~~~~~~~~~
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:634:1: note: candidate function template not viable: no known conversion from 'const std::optional<int>' to 'const unsigned char *' for 2nd argument
+  634 | operator<<(basic_ostream<char, _Traits>& __os, const unsigned char* __str) {
+      | ^                                              ~~~~~~~~~~~~~~~~~~~~~~~~~~
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:772:1: note: candidate function template not viable: no known conversion from 'const std::optional<int>' to 'const error_code' for 2nd argument
+  772 | operator<<(basic_ostream<_CharT, _Traits>& __os, const error_code& __ec) {
+      | ^                                                ~~~~~~~~~~~~~~~~~~~~~~
+../../third_party/libc++/src/include/__random/bernoulli_distribution.h:95:1: note: candidate function template not viable: no known conversion from 'const std::optional<int>' to 'const bernoulli_distribution' for 2nd argument
+   95 | operator<<(basic_ostream<_CharT, _Traits>& __os, const bernoulli_distribution& __x) {
+      | ^                                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:528:55: note: candidate template ignored: deduced conflicting types for parameter '_CharT' ('char' vs. 'std::optional<int>')
+  528 | _LIBCPP_HIDE_FROM_ABI basic_ostream<_CharT, _Traits>& operator<<(basic_ostream<_CharT, _Traits>& __os, _CharT __c) {
+      |                                                       ^
+../../third_party/libc++/src/include/__cstddef/byte.h:63:38: note: candidate template ignored: requirement 'is_integral<std::optional<int>>::value' was not satisfied [with _Integer = std::optional<int>]
+   63 | _LIBCPP_HIDE_FROM_ABI constexpr byte operator<<(byte __lhs, _Integer __shift) noexcept {
+      |                                      ^
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:576:1: note: candidate template ignored: could not match 'const _CharT *' against 'std::optional<int>'
+  576 | operator<<(basic_ostream<_CharT, _Traits>& __os, const _CharT* __str) {
+      | ^
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:753:33: note: candidate template ignored: requirement 'integral_constant<bool, false>::value' was not satisfied [with _Stream = std::ostringstream &, _Tp = std::optional<int>]
+  753 | _LIBCPP_HIDE_FROM_ABI _Stream&& operator<<(_Stream&& __os, const _Tp& __x) {
+      |                                 ^
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:760:1: note: candidate template ignored: could not match 'basic_string' against 'std::optional'
+  760 | operator<<(basic_ostream<_CharT, _Traits>& __os, const basic_string<_CharT, _Traits, _Allocator>& __str) {
+      | ^
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:766:1: note: candidate template ignored: could not match 'basic_string_view' against 'std::optional'
+  766 | operator<<(basic_ostream<_CharT, _Traits>& __os, basic_string_view<_CharT, _Traits> __sv) {
+      | ^
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:778:1: note: candidate template ignored: could not match 'shared_ptr' against 'std::optional'
+  778 | operator<<(basic_ostream<_CharT, _Traits>& __os, shared_ptr<_Yp> const& __p) {
+      | ^
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:792:1: note: candidate template ignored: could not match 'unique_ptr' against 'std::optional'
+  792 | operator<<(basic_ostream<_CharT, _Traits>& __os, unique_ptr<_Yp, _Dp> const& __p) {
+      | ^
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:798:1: note: candidate template ignored: could not match 'bitset' against 'std::optional'
+  798 | operator<<(basic_ostream<_CharT, _Traits>& __os, const bitset<_Size>& __x) {
+      | ^
+../../third_party/libc++/src/include/iomanip:287:1: note: candidate template ignored: could not match '__iom_t8' against 'std::optional'
+  287 | operator<<(basic_ostream<_CharT, _Traits>& __os, const __iom_t8<_MoneyT>& __x) {
+      | ^
+../../third_party/libc++/src/include/iomanip:384:1: note: candidate template ignored: could not match '__iom_t10' against 'std::optional'
+  384 | operator<<(basic_ostream<_CharT, _Traits>& __os, const __iom_t10<_CharT>& __x) {
+      | ^
+../../third_party/libc++/src/include/__random/uniform_int_distribution.h:234:1: note: candidate template ignored: could not match 'uniform_int_distribution' against 'std::optional'
+  234 | operator<<(basic_ostream<_CharT, _Traits>& __os, const uniform_int_distribution<_IT>& __x) {
+      | ^
+../../third_party/libc++/src/include/__random/uniform_real_distribution.h:108:1: note: candidate template ignored: could not match 'uniform_real_distribution' against 'std::optional'
+  108 | operator<<(basic_ostream<_CharT, _Traits>& __os, const uniform_real_distribution<_RT>& __x) {
+      | ^
+../../third_party/libc++/src/include/__random/binomial_distribution.h:169:1: note: candidate template ignored: could not match 'binomial_distribution' against 'std::optional'
+  169 | operator<<(basic_ostream<_CharT, _Traits>& __os, const binomial_distribution<_IntType>& __x) {
+      | ^
+../../third_party/libc++/src/include/__random/cauchy_distribution.h:108:1: note: candidate template ignored: could not match 'cauchy_distribution' against 'std::optional'
+  108 | operator<<(basic_ostream<_CharT, _Traits>& __os, const cauchy_distribution<_RT>& __x) {
+      | ^
+../../third_party/libc++/src/include/__random/exponential_distribution.h:105:1: note: candidate template ignored: could not match 'exponential_distribution' against 'std::optional'
+  105 | operator<<(basic_ostream<_CharT, _Traits>& __os, const exponential_distribution<_RealType>& __x) {
+      | ^
+../../third_party/libc++/src/include/__random/gamma_distribution.h:150:1: note: candidate template ignored: could not match 'gamma_distribution' against 'std::optional'
+  150 | operator<<(basic_ostream<_CharT, _Traits>& __os, const gamma_distribution<_RT>& __x) {
+      | ^
+../../third_party/libc++/src/include/__random/chi_squared_distribution.h:97:1: note: candidate template ignored: could not match 'chi_squared_distribution' against 'std::optional'
+   97 | operator<<(basic_ostream<_CharT, _Traits>& __os, const chi_squared_distribution<_RT>& __x) {
+      | ^
+../../third_party/libc++/src/include/__random/linear_congruential_engine.h:359:1: note: candidate template ignored: could not match 'linear_congruential_engine' against 'std::optional'
+  359 | operator<<(basic_ostream<_CharT, _Traits>& __os, const linear_congruential_engine<_UIntType, __a, __c, __m>& __x) {
+      | ^
+../../third_party/libc++/src/include/__random/discard_block_engine.h:143:1: note: candidate template ignored: could not match 'discard_block_engine' against 'std::optional'
+  143 | operator<<(basic_ostream<_CharT, _Traits>& __os, const discard_block_engine<_Eng, _Pp, _Rp>& __x) {
+      | ^
+../../third_party/libc++/src/include/__random/discrete_distribution.h:179:1: note: candidate template ignored: could not match 'discrete_distribution' against 'std::optional'
+  179 | operator<<(basic_ostream<_CharT, _Traits>& __os, const discrete_distribution<_IT>& __x) {
+      | ^
+../../third_party/libc++/src/include/__random/extreme_value_distribution.h:108:1: note: candidate template ignored: could not match 'extreme_value_distribution' against 'std::optional'
+  108 | operator<<(basic_ostream<_CharT, _Traits>& __os, const extreme_value_distribution<_RT>& __x) {
+      | ^
+../../third_party/libc++/src/include/__random/fisher_f_distribution.h:107:1: note: candidate template ignored: could not match 'fisher_f_distribution' against 'std::optional'
+  107 | operator<<(basic_ostream<_CharT, _Traits>& __os, const fisher_f_distribution<_RT>& __x) {
+      | ^
+../../third_party/libc++/src/include/__random/normal_distribution.h:136:1: note: candidate template ignored: could not match 'normal_distribution' against 'std::optional'
+  136 | operator<<(basic_ostream<_CharT, _Traits>& __os, const normal_distribution<_RT>& __x) {
+      | ^
+../../third_party/libc++/src/include/__random/poisson_distribution.h:215:1: note: candidate template ignored: could not match 'poisson_distribution' against 'std::optional'
+  215 | operator<<(basic_ostream<_CharT, _Traits>& __os, const poisson_distribution<_IntType>& __x) {
+      | ^
+../../third_party/libc++/src/include/__random/negative_binomial_distribution.h:127:1: note: candidate template ignored: could not match 'negative_binomial_distribution' against 'std::optional'
+  127 | operator<<(basic_ostream<_CharT, _Traits>& __os, const negative_binomial_distribution<_IntType>& __x) {
+      | ^
+../../third_party/libc++/src/include/__random/geometric_distribution.h:94:1: note: candidate template ignored: could not match 'geometric_distribution' against 'std::optional'
+   94 | operator<<(basic_ostream<_CharT, _Traits>& __os, const geometric_distribution<_IntType>& __x) {
+      | ^
+../../third_party/libc++/src/include/__random/independent_bits_engine.h:187:1: note: candidate template ignored: could not match 'independent_bits_engine' against 'std::optional'
+  187 | operator<<(basic_ostream<_CharT, _Traits>& __os, const independent_bits_engine<_Eng, _Wp, _UInt>& __x) {
+      | ^
+../../third_party/libc++/src/include/__random/shuffle_order_engine.h:193:1: note: candidate template ignored: could not match 'shuffle_order_engine' against 'std::optional'
+  193 | operator<<(basic_ostream<_CharT, _Traits>& __os, const shuffle_order_engine<_Eng, _Kp>& __x) {
+      | ^
+../../third_party/libc++/src/include/__random/lognormal_distribution.h:112:1: note: candidate template ignored: could not match 'lognormal_distribution' against 'std::optional'
+  112 | operator<<(basic_ostream<_CharT, _Traits>& __os, const lognormal_distribution<_RT>& __x) {
+      | ^
+../../third_party/libc++/src/include/__random/mersenne_twister_engine.h:830:1: note: candidate template ignored: could not match 'mersenne_twister_engine' against 'std::optional'
+  830 | operator<<(basic_ostream<_CharT, _Traits>& __os,
+      | ^
+../../third_party/libc++/src/include/__random/piecewise_constant_distribution.h:248:1: note: candidate template ignored: could not match 'piecewise_constant_distribution' against 'std::optional'
+  248 | operator<<(basic_ostream<_CharT, _Traits>& __os, const piecewise_constant_distribution<_RT>& __x) {
+      | ^
+../../third_party/libc++/src/include/__random/piecewise_linear_distribution.h:261:1: note: candidate template ignored: could not match 'piecewise_linear_distribution' against 'std::optional'
+  261 | operator<<(basic_ostream<_CharT, _Traits>& __os, const piecewise_linear_distribution<_RT>& __x) {
+      | ^
+../../third_party/libc++/src/include/__random/subtract_with_carry_engine.h:240:1: note: candidate template ignored: could not match 'subtract_with_carry_engine' against 'std::optional'
+  240 | operator<<(basic_ostream<_CharT, _Traits>& __os, const subtract_with_carry_engine<_UInt, _Wp, _Sp, _Rp>& __x) {
+      | ^
+../../third_party/libc++/src/include/__random/student_t_distribution.h:104:1: note: candidate template ignored: could not match 'student_t_distribution' against 'std::optional'
+  104 | operator<<(basic_ostream<_CharT, _Traits>& __os, const student_t_distribution<_RT>& __x) {
+      | ^
+../../third_party/libc++/src/include/__random/weibull_distribution.h:101:1: note: candidate template ignored: could not match 'weibull_distribution' against 'std::optional'
+  101 | operator<<(basic_ostream<_CharT, _Traits>& __os, const weibull_distribution<_RT>& __x) {
+      | ^
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:76:56: note: candidate function not viable: no known conversion from 'const std::optional<int>' to 'ostream &(*)(ostream &)' for 1st argument
+   76 |   inline _LIBCPP_HIDE_FROM_ABI_AFTER_V1 basic_ostream& operator<<(basic_ostream& (*__pf)(basic_ostream&)) {
+      |                                                        ^          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:81:3: note: candidate function not viable: no known conversion from 'const std::optional<int>' to 'basic_ios<char_type, traits_type> &(*)(basic_ios<char_type, traits_type> &)' (aka 'basic_ios<char, std::char_traits<char>> &(*)(basic_ios<char, std::char_traits<char>> &)') for 1st argument
+   81 |   operator<<(basic_ios<char_type, traits_type>& (*__pf)(basic_ios<char_type, traits_type>&)) {
+      |   ^          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:86:56: note: candidate function not viable: no known conversion from 'const std::optional<int>' to 'ios_base &(*)(ios_base &)' for 1st argument
+   86 |   inline _LIBCPP_HIDE_FROM_ABI_AFTER_V1 basic_ostream& operator<<(ios_base& (*__pf)(ios_base&)) {
+      |                                                        ^          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:91:18: note: candidate function not viable: no known conversion from 'const std::optional<int>' to 'bool' for 1st argument
+   91 |   basic_ostream& operator<<(bool __n);
+      |                  ^          ~~~~~~~~
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:92:18: note: candidate function not viable: no known conversion from 'const std::optional<int>' to 'short' for 1st argument
+   92 |   basic_ostream& operator<<(short __n);
+      |                  ^          ~~~~~~~~~
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:93:18: note: candidate function not viable: no known conversion from 'const std::optional<int>' to 'unsigned short' for 1st argument
+   93 |   basic_ostream& operator<<(unsigned short __n);
+      |                  ^          ~~~~~~~~~~~~~~~~~~
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:94:18: note: candidate function not viable: no known conversion from 'const std::optional<int>' to 'int' for 1st argument
+   94 |   basic_ostream& operator<<(int __n);
+      |                  ^          ~~~~~~~
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:95:18: note: candidate function not viable: no known conversion from 'const std::optional<int>' to 'unsigned int' for 1st argument
+   95 |   basic_ostream& operator<<(unsigned int __n);
+      |                  ^          ~~~~~~~~~~~~~~~~
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:96:18: note: candidate function not viable: no known conversion from 'const std::optional<int>' to 'long' for 1st argument
+   96 |   basic_ostream& operator<<(long __n);
+      |                  ^          ~~~~~~~~
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:97:18: note: candidate function not viable: no known conversion from 'const std::optional<int>' to 'unsigned long' for 1st argument
+   97 |   basic_ostream& operator<<(unsigned long __n);
+      |                  ^          ~~~~~~~~~~~~~~~~~
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:98:18: note: candidate function not viable: no known conversion from 'const std::optional<int>' to 'long long' for 1st argument
+   98 |   basic_ostream& operator<<(long long __n);
+      |                  ^          ~~~~~~~~~~~~~
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:99:18: note: candidate function not viable: no known conversion from 'const std::optional<int>' to 'unsigned long long' for 1st argument
+   99 |   basic_ostream& operator<<(unsigned long long __n);
+      |                  ^          ~~~~~~~~~~~~~~~~~~~~~~
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:100:18: note: candidate function not viable: no known conversion from 'const std::optional<int>' to 'float' for 1st argument
+  100 |   basic_ostream& operator<<(float __f);
+      |                  ^          ~~~~~~~~~
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:101:18: note: candidate function not viable: no known conversion from 'const std::optional<int>' to 'double' for 1st argument
+  101 |   basic_ostream& operator<<(double __f);
+      |                  ^          ~~~~~~~~~~
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:102:18: note: candidate function not viable: no known conversion from 'const std::optional<int>' to 'long double' for 1st argument
+  102 |   basic_ostream& operator<<(long double __f);
+      |                  ^          ~~~~~~~~~~~~~~~
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:103:18: note: candidate function not viable: no known conversion from 'const std::optional<int>' to 'const void *' for 1st argument; take the address of the argument with &
+  103 |   basic_ostream& operator<<(const void* __p);
+      |                  ^          ~~~~~~~~~~~~~~~
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:111:18: note: candidate function not viable: no known conversion from 'const std::optional<int>' to 'basic_streambuf<char_type, traits_type> *' (aka 'basic_streambuf<char, std::char_traits<char>> *') for 1st argument
+  111 |   basic_ostream& operator<<(basic_streambuf<char_type, traits_type>* __sb);
+      |                  ^          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../../third_party/libc++/src/include/__ostream/basic_ostream.h:116:40: note: candidate function not viable: no known conversion from 'const std::optional<int>' to 'nullptr_t' (aka 'std::nullptr_t') for 1st argument
+  116 |   _LIBCPP_HIDE_FROM_ABI basic_ostream& operator<<(nullptr_t) { return *this << "nullptr"; }
+      |                                        ^          ~~~~~~~~~
+5 errors generated.
+ninja: build stopped: subcommand failed.

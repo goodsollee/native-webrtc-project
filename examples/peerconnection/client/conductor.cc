@@ -1395,9 +1395,8 @@ void Conductor::GetReceiverVideoStats() {
 
     // Start collection if not already running
     if (!stats_collector_->IsRunning()) {
-        std::string filename = "receiver_video_stats.csv";
-        if (stats_collector_->Start(filename, peer_connection_)) {
-            RTC_LOG(LS_INFO) << "Started stats collection to " << filename;
+        if (stats_collector_->Start(log_dir_, peer_connection_)) {
+            RTC_LOG(LS_INFO) << "Started stats collection to " << log_dir_;
         } else {
             RTC_LOG(LS_ERROR) << "Failed to start stats collection";
         }

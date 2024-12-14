@@ -12,12 +12,23 @@
 #include <thread>
 #include <condition_variable>
 
+
+// Add persistent stats structure
+struct PersistentStats {
+    int64_t frame_timing_count_ = 0;
+    int64_t last_render_time_ms_ = -1;
+    int64_t last_timestamp_ = -1;
+};
+
 class RTCStatsCollectorCallback : public webrtc::RTCStatsCollectorCallback {
 public:
-    RTCStatsCollectorCallback(std::ofstream& stats_file,
-                             std::mutex& mutex); 
+    RTCStatsCollectorCallback(
+        std::ofstream& per_frame_stats_file,
+        std::ofstream& average_stats_file,
+        std::mutex& stats_mutex,
+        PersistentStats& persistent_stats);  // Add persistent stats
+    ~RTCStatsCollectorCallback();
 
-    ~RTCStatsCollectorCallback() override;
 
 protected:
     void OnStatsDelivered(
@@ -29,8 +40,12 @@ private:
     
     void ProcessInboundRTPStats(const webrtc::RTCStats& stats);
 
-    std::ofstream& stats_file_;
+    std::ofstream& per_frame_stats_file_;
+    std::ofstream& average_stats_file_;
     std::mutex& stats_mutex_;
+    PersistentStats& persistent_stats_;  // Reference to persistent stats
+
+    const int kFrameTimingLogCount = 60; // 60 frames per second
 };
 
 class RTCStatsCollector {
@@ -51,8 +66,9 @@ private:
     bool OpenStatsFile(const std::string& filename);
     void CloseStatsFile();
 
-    std::ofstream stats_file_;
-    
+    std::ofstream per_frame_stats_file_;
+    std::ofstream average_stats_file_;
+
     std::thread stats_thread_;          // Use std::thread instead of rtc::Thread
     std::mutex stats_mutex_;            // Mutex for thread safety
     std::condition_variable stop_cv_;   // To signal the thread to stop
@@ -60,6 +76,8 @@ private:
     rtc::scoped_refptr<webrtc::PeerConnectionInterface> peer_connection_;
 
     bool is_running_ = false;
-    const int kStatsIntervalMs = 1000; // Collection interval in milliseconds
+    const int kStatsIntervalMs = 16; // Collection interval in milliseconds
+
+    PersistentStats persistent_stats_;
 };
 #endif  // RTC_STATS_COLLECTOR_H_

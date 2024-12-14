@@ -96,7 +96,7 @@ std::string TimingFrameInfo::ToString() const {
      << pacer_exit_ms << ',' << network_timestamp_ms << ','
      << network2_timestamp_ms << ',' << receive_start_ms << ','
      << receive_finish_ms << ',' << decode_start_ms << ',' << decode_finish_ms
-     << ',' << render_time_ms << ',' << IsOutlier() << ','
+     << ',' << render_time_ms << ',' << EndToEndDelay() << ',' << IsOutlier() << ','
      << IsTimerTriggered();
 
   return sb.str();

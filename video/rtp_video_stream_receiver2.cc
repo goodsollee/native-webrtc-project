@@ -1229,7 +1229,7 @@ bool RtpVideoStreamReceiver2::DeliverRtcp(const uint8_t* rtcp_packet,
     ntp_estimator_.UpdateRtcpTimestamp(*rtt, last_sr->last_remote_ntp_timestamp,
                                        last_sr->last_remote_rtp_timestamp);
     
-    std::optional<int64_t> remote_to_local_clock_offset =
+    std::optional<int64_t> remote_to_local_clock_offset = 0;
         ntp_estimator_.EstimateRemoteToLocalClockOffset();
     if (remote_to_local_clock_offset.has_value()) {
       RTC_LOG(LS_INFO) << "DeliverRtcp: Updated clock offset: " 

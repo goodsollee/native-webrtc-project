@@ -78,6 +78,8 @@ class RtpFrameObject : public EncodedFrame {
   // Equal to times nacked of the packet with the highet times nacked
   // belonging to this frame.
   int times_nacked_;
+
+  std::optional<TimeDelta> min_rtt_;  // Add this member
 };
 
 }  // namespace webrtc

@@ -501,6 +501,17 @@ std::optional<TimeDelta> ModuleRtpRtcpImpl2::LastRtt() const {
   return rtt;
 }
 
+std::optional<TimeDelta> ModuleRtpRtcpImpl2::MinRtt() const {
+  std::optional<TimeDelta> rtt = rtcp_receiver_.MinRtt();
+  if (!rtt.has_value()) {
+    MutexLock lock(&mutex_rtt_);
+    if (rtt_ms_ > 0) {
+      rtt = TimeDelta::Millis(rtt_ms_);
+    }
+  }
+  return rtt;
+}
+
 TimeDelta ModuleRtpRtcpImpl2::ExpectedRetransmissionTime() const {
   int64_t expected_retransmission_time_ms = rtt_ms();
   if (expected_retransmission_time_ms > 0) {

@@ -142,4 +142,5 @@ const RTPVideoHeader& RtpFrameObject::GetRtpVideoHeader() const {
 void RtpFrameObject::SetHeaderFromMetadata(const VideoFrameMetadata& metadata) {
   rtp_video_header_.SetFromMetadata(metadata);
 }
+
 }  // namespace webrtc

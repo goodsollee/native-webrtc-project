@@ -390,6 +390,9 @@ class RtpRtcpInterface : public RtcpFeedbackSenderInterface {
   // Returns current RTT (round-trip time) estimate.
   virtual std::optional<TimeDelta> LastRtt() const = 0;
 
+  // Returns current RTT (round-trip time) estimate.
+  virtual std::optional<TimeDelta> MinRtt() const = 0;
+
   // Returns the estimated RTT, with fallback to a default value.
   virtual TimeDelta ExpectedRetransmissionTime() const = 0;
 

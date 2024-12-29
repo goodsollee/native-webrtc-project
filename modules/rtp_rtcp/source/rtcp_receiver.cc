@@ -275,6 +275,7 @@ uint32_t RTCPReceiver::RemoteSSRC() const {
 void RTCPReceiver::RttStats::AddRtt(TimeDelta rtt) {
   last_rtt_ = rtt;
   sum_rtt_ += rtt;
+  min_rtt_ = std::min(min_rtt_, rtt);
   ++num_rtts_;
 }
 
@@ -294,6 +295,15 @@ std::optional<TimeDelta> RTCPReceiver::LastRtt() const {
     return std::nullopt;
   }
   return it->second.last_rtt();
+}
+
+std::optional<TimeDelta> RTCPReceiver::MinRtt() const {
+  MutexLock lock(&rtcp_receiver_lock_);
+  auto it = rtts_.find(remote_ssrc_);
+  if (it == rtts_.end()) {
+    return std::nullopt;
+  }
+  return it->second.min_rtt();
 }
 
 RTCPReceiver::NonSenderRttStats RTCPReceiver::GetNonSenderRTT() const {

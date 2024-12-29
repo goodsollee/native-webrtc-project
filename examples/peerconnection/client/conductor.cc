@@ -430,6 +430,14 @@ bool Conductor::CreatePeerConnection() {
     config.certificates.push_back(certificate);
   }
 
+
+  // Set port range in configuration
+  const int kMinPort = 50000;  // Minimum port
+  const int kMaxPort = 50005;  // Maximum port
+  config.port_allocator_config.min_port = kMinPort;
+  config.port_allocator_config.max_port = kMaxPort;
+
+
   webrtc::PeerConnectionDependencies pc_dependencies(this);
   auto error_or_peer_connection =
       peer_connection_factory_->CreatePeerConnectionOrError(

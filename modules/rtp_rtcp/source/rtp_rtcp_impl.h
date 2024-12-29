@@ -193,6 +193,9 @@ class ABSL_DEPRECATED("") ModuleRtpRtcpImpl
   // Get RoundTripTime.
   std::optional<TimeDelta> LastRtt() const override;
 
+  // Get RoundTripTime.
+  std::optional<TimeDelta> MinRtt() const override;
+
   TimeDelta ExpectedRetransmissionTime() const override;
 
   // Force a send of an RTCP packet.

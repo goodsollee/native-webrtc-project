@@ -125,6 +125,7 @@ class RTCPReceiver final {
 
   std::optional<TimeDelta> AverageRtt() const;
   std::optional<TimeDelta> LastRtt() const;
+  std::optional<TimeDelta> MinRtt() const;
 
   // Returns non-sender RTT metrics for the remote SSRC.
   NonSenderRttStats GetNonSenderRTT() const;
@@ -254,10 +255,12 @@ class RTCPReceiver final {
 
     TimeDelta last_rtt() const { return last_rtt_; }
     TimeDelta average_rtt() const { return sum_rtt_ / num_rtts_; }
+    TimeDelta min_rtt() const { return min_rtt_; }
 
    private:
     TimeDelta last_rtt_ = TimeDelta::Zero();
     TimeDelta sum_rtt_ = TimeDelta::Zero();
+    TimeDelta min_rtt_ = TimeDelta::PlusInfinity();
     size_t num_rtts_ = 0;
   };
 

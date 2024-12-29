@@ -45,7 +45,7 @@ private:
     std::mutex& stats_mutex_;
     PersistentStats& persistent_stats_;  // Reference to persistent stats
 
-    const int kFrameTimingLogCount = 60; // 60 frames per second
+    const int kFrameTimingLogCount = 5; // 60 frames per second
 };
 
 class RTCStatsCollector {
@@ -76,7 +76,7 @@ private:
     rtc::scoped_refptr<webrtc::PeerConnectionInterface> peer_connection_;
 
     bool is_running_ = false;
-    const int kStatsIntervalMs = 16; // Collection interval in milliseconds
+    const int kStatsIntervalMs = 200; // Collection interval in milliseconds
 
     PersistentStats persistent_stats_;
 };

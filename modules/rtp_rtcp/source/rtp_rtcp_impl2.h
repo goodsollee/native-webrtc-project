@@ -187,6 +187,8 @@ class ModuleRtpRtcpImpl2 final : public RtpRtcpInterface,
   // Get RoundTripTime.
   std::optional<TimeDelta> LastRtt() const override;
 
+  std::optional<TimeDelta> MinRtt() const override;
+
   TimeDelta ExpectedRetransmissionTime() const override;
 
   // Force a send of an RTCP packet.

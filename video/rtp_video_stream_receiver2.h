@@ -213,6 +213,14 @@ class RtpVideoStreamReceiver2 : public LossNotificationSender,
   std::optional<RtpRtcpInterface::SenderReportStats> GetSenderReportStats()
       const;
 
+  void  LogFrameTimings (int64_t first_packet_received_time, int64_t last_packet_received_time,
+    uint32_t rtp_timestamp, const VideoSendTiming& timing);
+
+  int32_t log_counter_ = 0;
+  int64_t ntp_timestamp_ = 0;
+  int64_t current_encode_time_ = -1;
+  int64_t last_frame_received_time_ = 0;
+
  private:
   // Implements RtpVideoFrameReceiver.
   void ManageFrame(std::unique_ptr<RtpFrameObject> frame) override;

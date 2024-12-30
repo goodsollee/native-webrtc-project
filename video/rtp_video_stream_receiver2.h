@@ -213,8 +213,7 @@ class RtpVideoStreamReceiver2 : public LossNotificationSender,
   std::optional<RtpRtcpInterface::SenderReportStats> GetSenderReportStats()
       const;
 
-  void  LogFrameTimings (int64_t first_packet_received_time, int64_t last_packet_received_time,
-    uint32_t rtp_timestamp, const VideoSendTiming& timing);
+  void LogFrameTimings (int64_t first_packet_received_time, int64_t last_packet_received_time, uint32_t rtp_timestamp, VideoSendTiming& timing);
 
   int32_t log_counter_ = 0;
   int64_t ntp_timestamp_ = 0;

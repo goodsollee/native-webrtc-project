@@ -52,6 +52,9 @@ TimingFrameInfo::TimingFrameInfo()
       decode_start_ms(-1),
       decode_finish_ms(-1),
       render_time_ms(-1),
+      frame_construction_delay_ms(-1),
+      inter_frame_delay_ms(-1),
+      network_delay_ms(-1),
       flags(VideoSendTiming::kNotTriggered) {}
 
 int64_t TimingFrameInfo::EndToEndDelay() const {

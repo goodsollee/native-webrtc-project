@@ -249,6 +249,10 @@ class RTC_EXPORT EncodedImage {
     int64_t network2_timestamp_ms = 0;
     int64_t receive_start_ms = 0;
     int64_t receive_finish_ms = 0;
+
+    int64_t frame_construction_delay_ms = -1;
+    int64_t inter_frame_delay_ms = -1;
+    int64_t network_delay_ms = -1; 
   } timing_;
   EncodedImage::Timing video_timing() const { return timing_; }
   EncodedImage::Timing* video_timing_mutable() { return &timing_; }

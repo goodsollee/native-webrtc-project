@@ -150,6 +150,8 @@ class Conductor : public webrtc::PeerConnectionObserver,
   void OnSuccess(webrtc::SessionDescriptionInterface* desc) override;
   void OnFailure(webrtc::RTCError error) override;
 
+  std::string GetLogFolder() const override {return log_dir_;}
+
  protected:
   // Send a message to the remote peer.
   void SendMessage(const std::string& json_object);

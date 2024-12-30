@@ -570,6 +570,10 @@ void GtkMainWnd::ResizeWindow(int width, int height) {
   window_resizing_ = false;
 }
 
+std::string GtkMainWnd::GetLogFolder() const {
+  return callback_->GetLogFolder();  // callback_ is MainWndCallback which Conductor implements
+}
+
 GtkMainWnd::VideoRenderer::VideoRenderer(
     GtkMainWnd* main_wnd,
     webrtc::VideoTrackInterface* track_to_render)
@@ -578,6 +582,9 @@ GtkMainWnd::VideoRenderer::VideoRenderer(
       main_wnd_(main_wnd),
       rendered_track_(track_to_render) {
   rendered_track_->AddOrUpdateSink(this, rtc::VideoSinkWants());
+
+  // Get log folder from Conductor through MainWnd
+  InitializeLogging(main_wnd_->GetLogFolder());
 }
 
 GtkMainWnd::VideoRenderer::~VideoRenderer() {
@@ -629,6 +636,9 @@ void GtkMainWnd::VideoRenderer::OnFrame(const webrtc::VideoFrame& video_frame) {
     last_frame_time_ = current_time;
   }
 
+  // Log frame metrics
+  LogFrameMetrics(video_frame);
+
   rtc::scoped_refptr<webrtc::I420BufferInterface> buffer(
       video_frame.video_frame_buffer()->ToI420());
   if (video_frame.rotation() != webrtc::kVideoRotation_0) {
@@ -648,4 +658,43 @@ void GtkMainWnd::VideoRenderer::OnFrame(const webrtc::VideoFrame& video_frame) {
 
   // This will trigger a redraw with the current scale
   g_idle_add(Redraw, main_wnd_);
+}
+
+void GtkMainWnd::VideoRenderer::InitializeLogging(const std::string& log_folder) {
+  if (logging_initialized_)
+    return;
+
+  log_folder_ = log_folder;
+  std::string log_path = log_folder_ + "/frame_metrics.csv";
+  
+  frame_log_file_.open(log_path, std::ios::out);
+  if (frame_log_file_.is_open()) {
+    // Write CSV header
+    frame_log_file_ << "timestamp,rtp_timestamp,"
+                    << "encode_ms,network_ms,decode_ms,render_ms,"
+                    << "frame_construction_delay_ms,inter_frame_delay_ms,"
+                    << "fps\n";
+    logging_initialized_ = true;
+  }
+}
+
+void GtkMainWnd::VideoRenderer::LogFrameMetrics(const webrtc::VideoFrame& frame) {
+  if (!logging_initialized_ || !frame_log_file_.is_open())
+    return;
+
+  const webrtc::VideoFrame::FrameTiming& timing = frame.frame_timing();
+  int64_t current_time = rtc::TimeMillis();
+
+  frame_log_file_ << current_time << ","
+                  << frame.rtp_timestamp() << ","
+                  << timing.encode_ms << ","
+                  << timing.network_ms << ","
+                  << timing.decode_ms << ","
+                  << timing.render_ms << ","
+                  << timing.frame_construction_delay_ms << ","
+                  << timing.inter_frame_delay_ms << ","
+                  << current_fps_ << "\n";
+  
+  // Flush to ensure data is written immediately
+  frame_log_file_.flush();
 }

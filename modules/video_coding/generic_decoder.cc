@@ -223,6 +223,7 @@ void VCMDecodedFrameCallback::Decoded(VideoFrame& decodedImage,
   timing_frame_info.rtp_timestamp = decodedImage.rtp_timestamp();
   timing_frame_info.receive_start_ms = frame_info->timing.receive_start_ms;
   timing_frame_info.receive_finish_ms = frame_info->timing.receive_finish_ms;
+
   RTC_HISTOGRAM_COUNTS_1000(
       "WebRTC.Video.GenericDecoder.PacketReceiveDelay",
       timing_frame_info.receive_finish_ms - timing_frame_info.receive_start_ms);
@@ -233,10 +234,28 @@ void VCMDecodedFrameCallback::Decoded(VideoFrame& decodedImage,
       "WebRTC.Video.GenericDecoder.DecodeDelay",
       timing_frame_info.decode_finish_ms - timing_frame_info.decode_start_ms);
   _timing->SetTimingFrameInfo(timing_frame_info);
+  
+  // Create and populate frame timing
+  VideoFrame::FrameTiming frame_timing;
 
+  // Set encode time from frame_info timing
+  frame_timing.encode_ms = frame_info->timing.encode_finish_ms - frame_info->timing.encode_start_ms;
 
-  RTC_LOG(LS_INFO) << "googTimingFrameInfo: " 
-                    << timing_frame_info.ToString();
+  // Set network delay from frame_info timing
+  frame_timing.network_ms = frame_info->timing.network_delay_ms;
+
+  // Set decode time
+  frame_timing.decode_ms = timing_frame_info.decode_finish_ms - timing_frame_info.decode_start_ms;
+
+  // Set render time 
+  frame_timing.render_ms = timing_frame_info.render_time_ms;
+
+  // Set additional timing info
+  frame_timing.frame_construction_delay_ms = frame_info->timing.frame_construction_delay_ms;
+  frame_timing.inter_frame_delay_ms = frame_info->timing.inter_frame_delay_ms;
+
+  // Set frame timing on decoded image
+  decodedImage.set_frame_timing(frame_timing);
 
   decodedImage.set_timestamp_us(
       frame_info->render_time ? frame_info->render_time->us() : -1);

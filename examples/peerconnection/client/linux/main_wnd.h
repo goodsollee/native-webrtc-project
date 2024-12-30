@@ -26,6 +26,7 @@
 #include "rtc_base/buffer.h"
 #include <glib.h> // Add this for gboolean and gpointer
 #include <gtk/gtk.h> // Add this for GTK types
+#include <fstream>
 
 // Forward declarations.
 typedef struct _GtkWidget GtkWidget;
@@ -98,9 +99,10 @@ class GtkMainWnd : public MainWindow {
                                   gpointer data);
   void OnConfigure(GtkWidget* widget, GdkEventConfigure* event);
   void ResizeWindow (int width, int height);
+  std::string GetLogFolder() const; 
 
  protected:
-  class VideoRenderer : public rtc::VideoSinkInterface<webrtc::VideoFrame> {
+  class VideoRenderer : public rtc::VideoSinkInterface<webrtc::VideoFrame>{
    public:
     VideoRenderer(GtkMainWnd* main_wnd,
                   webrtc::VideoTrackInterface* track_to_render);
@@ -118,6 +120,13 @@ class GtkMainWnd : public MainWindow {
     float fps() const { return current_fps_; }
 
     float bitrate() const { return current_bitrate_; } 
+
+    std::string log_folder_;
+    std::ofstream frame_log_file_;
+    bool logging_initialized_ = false;
+
+    void InitializeLogging(const std::string& log_folder);
+    void LogFrameMetrics(const webrtc::VideoFrame& frame);
 
    protected:
     void SetSize(int width, int height);

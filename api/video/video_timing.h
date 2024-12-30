@@ -45,6 +45,12 @@ struct RTC_EXPORT VideoSendTiming {
   uint16_t pacer_exit_delta_ms;
   uint16_t network_timestamp_delta_ms;
   uint16_t network2_timestamp_delta_ms;
+
+  // Custom defined timestamps.
+  int64_t frame_construction_delay_ms = -1;
+  int64_t inter_frame_delay_ms = -1;
+  int64_t network_delay_ms = -1; 
+
   uint8_t flags = TimingFrameFlags::kInvalid;
 };
 
@@ -100,6 +106,11 @@ struct RTC_EXPORT TimingFrameInfo {
   int64_t decode_start_ms;    // Decode start time.
   int64_t decode_finish_ms;   // Decode completion time.
   int64_t render_time_ms;     // Proposed render time to insure smooth playback.
+
+  // Custom defined timestamps.
+  int64_t frame_construction_delay_ms = -1;
+  int64_t inter_frame_delay_ms = -1;
+  int64_t network_delay_ms = -1; 
 
   uint8_t flags;  // Flags indicating validity and/or why tracing was triggered.
 };

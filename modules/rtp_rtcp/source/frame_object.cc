@@ -98,6 +98,12 @@ RtpFrameObject::RtpFrameObject(
   timing_.receive_start_ms = first_packet_received_time;
   timing_.receive_finish_ms = last_packet_received_time;
   timing_.flags = timing.flags;
+
+  // Custom timing info
+  timing_.frame_construction_delay_ms = timing.frame_construction_delay_ms;
+  timing_.inter_frame_delay_ms = timing.inter_frame_delay_ms;
+  timing_.network_delay_ms = timing.network_delay_ms; 
+
   is_last_spatial_layer = markerBit;
 }
 

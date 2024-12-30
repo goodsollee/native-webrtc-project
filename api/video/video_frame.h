@@ -25,11 +25,31 @@
 #include "api/video/video_rotation.h"
 #include "rtc_base/checks.h"
 #include "rtc_base/system/rtc_export.h"
+#include "api/video/video_timing.h"
 
 namespace webrtc {
 
 class RTC_EXPORT VideoFrame {
  public:
+
+  // Add your new timing struct
+  struct RTC_EXPORT FrameTiming {
+    // Capture to render pipeline timings
+    int64_t encode_ms = 0;
+    int64_t network_ms = 0; 
+    int64_t decode_ms = 0;
+    int64_t render_ms = 0;       // When frame should be rendered
+
+    // Additional timing info
+    int64_t frame_construction_delay_ms = 0;
+    int64_t inter_frame_delay_ms = 0;
+  };
+
+  // Add getter/setter for the timing info
+  void set_frame_timing(const FrameTiming& timing) { frame_timing_ = timing; }
+  const FrameTiming& frame_timing() const { return frame_timing_; }
+  FrameTiming frame_timing_;
+
   // Value used to signal that `VideoFrame::id()` is not set.
   static constexpr uint16_t kNotSetId = 0;
 

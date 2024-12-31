@@ -697,7 +697,7 @@ void GtkMainWnd::VideoRenderer::LogFrameMetrics(const webrtc::VideoFrame& frame)
   }
 
   // Calculate estimated departure and network delay
-  int64_t estimated_departure = rtp_ms + rtp_time_offset_ + encode_ms; // rtp_ms +offset --> capture time
+  int64_t estimated_departure = rtp_ms + rtp_time_offset_ + timing.encode_ms; // rtp_ms +offset --> capture time
   int64_t estimated_network_ms = timing.last_packet_arrival_timestamp - estimated_departure;
 
   frame_log_file_ << current_time << ","

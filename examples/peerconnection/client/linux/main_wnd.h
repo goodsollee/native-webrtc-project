@@ -144,6 +144,9 @@ class GtkMainWnd : public MainWindow {
     size_t total_bytes_ = 0;
     float current_bitrate_ = 0.0f;  // in kbps
     int64_t bitrate_time_ = 0;
+
+    int64_t rtp_time_offset_ = 0;  // Store RTP timestamp to wall clock offset
+    bool offset_initialized_ = false;
   };
 
  protected:

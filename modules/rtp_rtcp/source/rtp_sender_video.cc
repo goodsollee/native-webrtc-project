@@ -69,6 +69,7 @@
 #include "rtc_base/synchronization/mutex.h"
 #include "system_wrappers/include/ntp_time.h"
 
+
 namespace webrtc {
 
 namespace {
@@ -377,10 +378,13 @@ void RTPSenderVideo::AddRtpHeaderExtensions(const RTPVideoHeader& video_header,
       video_header.content_type != VideoContentType::UNSPECIFIED)
     packet->SetExtension<VideoContentTypeExtension>(video_header.content_type);
 
-  if (last_packet &&
-      video_header.video_timing.flags != VideoSendTiming::kInvalid)
-    packet->SetExtension<VideoTimingExtension>(video_header.video_timing);
+  if (last_packet && 
+      video_header.video_timing.flags != VideoSendTiming::kInvalid) {
+        // print now time
+    RTC_LOG(LS_INFO) << "VideoSendtiming set at " << clock_->CurrentTime();
 
+    packet->SetExtension<VideoTimingExtension>(video_header.video_timing);
+  }
   // If transmitted, add to all packets; ack logic depends on this.
   if (playout_delay_pending_ && current_playout_delay_.has_value()) {
     packet->SetExtension<PlayoutDelayLimits>(*current_playout_delay_);

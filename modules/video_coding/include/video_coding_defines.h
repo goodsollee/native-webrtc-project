@@ -39,7 +39,7 @@ enum {
   // Timing frames settings. Timing frames are sent every
   // `kDefaultTimingFramesDelayMs`, or if the frame is at least
   // `kDefaultOutlierFrameSizePercent` in size of average frame.
-  kDefaultTimingFramesDelayMs = 200,
+  kDefaultTimingFramesDelayMs = 10,
   kDefaultOutlierFrameSizePercent = 500,
   // Maximum number of frames for what we store encode start timing information.
   kMaxEncodeStartTimeListSize = 150,

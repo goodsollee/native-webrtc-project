@@ -318,7 +318,6 @@ bool RTCStatsCollector::OpenStatsFile(const std::string& foldername) {
     std::string average_filename = foldername + "/average_stats.csv";
 
     // Open per-frame stats file
-    /*
     per_frame_stats_file_.open(per_frame_filename);
     if (!per_frame_stats_file_.is_open()) {
         RTC_LOG(LS_ERROR) << "Failed to open per-frame stats file: " << per_frame_filename;
@@ -328,7 +327,6 @@ bool RTCStatsCollector::OpenStatsFile(const std::string& foldername) {
     per_frame_stats_file_ << "timestamp_ms,rtp_timestamp,encoding_ms,network_ms,decoding_ms,rendering_ms,e2e_ms,"
                           << "inter_frame_ms,intra_construction_ms\n";
     per_frame_stats_file_.flush();
-    */
 
     // Open average stats file
     average_stats_file_.open(average_filename);

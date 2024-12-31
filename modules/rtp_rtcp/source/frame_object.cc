@@ -103,6 +103,7 @@ RtpFrameObject::RtpFrameObject(
   timing_.frame_construction_delay_ms = timing.frame_construction_delay_ms;
   timing_.inter_frame_delay_ms = timing.inter_frame_delay_ms;
   timing_.network_delay_ms = timing.network_delay_ms; 
+  timing_.encoded_size = image_buffer_->size();
 
   is_last_spatial_layer = markerBit;
 }

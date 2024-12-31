@@ -619,7 +619,7 @@ void GtkMainWnd::VideoRenderer::OnFrame(const webrtc::VideoFrame& video_frame) {
   frame_count_++;
 
   // Calculate bitrate
-  size_t frame_size = video_frame.size(); // Get frame size in bytes
+  size_t frame_size = video_frame.frame_timing().encoded_size; // Get frame size in bytes
   total_bytes_ += frame_size;
 
   // Update FPS and bitrate every second
@@ -670,10 +670,10 @@ void GtkMainWnd::VideoRenderer::InitializeLogging(const std::string& log_folder)
   frame_log_file_.open(log_path, std::ios::out);
   if (frame_log_file_.is_open()) {
     // Write CSV header
-    frame_log_file_ << "timestamp,rtp_timestamp,"
-                    << "encode_ms,network_ms,decode_ms,render_ms,"
+    frame_log_file_ << "timestamp,rtp_timestamp,first_packet_departure,estimated_first_packet_departure,first_packet_arrival,last_packet_arrival,render"
+                    << "encode_ms,network_ms,estimated_network_ms,decode_ms,"
                     << "frame_construction_delay_ms,inter_frame_delay_ms,"
-                    << "fps\n";
+                    << "encoded_size\n";
     logging_initialized_ = true;
   }
 }
@@ -685,15 +685,35 @@ void GtkMainWnd::VideoRenderer::LogFrameMetrics(const webrtc::VideoFrame& frame)
   const webrtc::VideoFrame::FrameTiming& timing = frame.frame_timing();
   int64_t current_time = rtc::TimeMillis();
 
+  // Calculate RTP timestamp in milliseconds (90kHz clock -> ms)
+  int64_t rtp_ms = frame.rtp_timestamp() * 1000 / 90000;
+  
+  // Initialize offset using first frame's data
+  if (!offset_initialized_ && timing.first_packet_departure_timestamp > 0) {
+    // Calculate offset using RTP timestamp and actual departure time
+    // Note: We don't include encode_ms in offset calculation as requested
+    rtp_time_offset_ = timing.first_packet_departure_timestamp - timing.encode_ms - rtp_ms;
+    offset_initialized_ = true;
+  }
+
+  // Calculate estimated departure and network delay
+  int64_t estimated_departure = rtp_ms + rtp_time_offset_ + encode_ms; // rtp_ms +offset --> capture time
+  int64_t estimated_network_ms = timing.last_packet_arrival_timestamp - estimated_departure;
+
   frame_log_file_ << current_time << ","
                   << frame.rtp_timestamp() << ","
+                  << timing.first_packet_departure_timestamp << ","
+                  << estimated_departure << ","
+                  << timing.first_packet_arrival_timestamp << ","
+                  << timing.last_packet_arrival_timestamp << ","
+                  << timing.render_ms << ","
                   << timing.encode_ms << ","
                   << timing.network_ms << ","
+                  << estimated_network_ms << ","
                   << timing.decode_ms << ","
-                  << timing.render_ms << ","
                   << timing.frame_construction_delay_ms << ","
                   << timing.inter_frame_delay_ms << ","
-                  << current_fps_ << "\n";
+                  << timing.encoded_size << "\n";  // New column
   
   // Flush to ensure data is written immediately
   frame_log_file_.flush();

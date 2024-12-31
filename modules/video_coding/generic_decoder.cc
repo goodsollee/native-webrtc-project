@@ -242,7 +242,7 @@ void VCMDecodedFrameCallback::Decoded(VideoFrame& decodedImage,
   frame_timing.encode_ms = frame_info->timing.encode_finish_ms - frame_info->timing.encode_start_ms;
 
   // Set network delay from frame_info timing
-  frame_timing.network_ms = frame_info->timing.network_delay_ms;
+  frame_timing.network_ms = frame_info->timing.receive_finish_ms - frame_info->timing.encode_finish_ms;
 
   // Set decode time
   frame_timing.decode_ms = timing_frame_info.decode_finish_ms - timing_frame_info.decode_start_ms;
@@ -250,9 +250,15 @@ void VCMDecodedFrameCallback::Decoded(VideoFrame& decodedImage,
   // Set render time 
   frame_timing.render_ms = timing_frame_info.render_time_ms;
 
+  // Set timestamp
+  frame_timing.first_packet_departure_timestamp = timing_frame_info.encode_finish_ms;
+  frame_timing.first_packet_arrival_timestamp = timing_frame_info.receive_start_ms;
+  frame_timing.last_packet_arrival_timestamp = timing_frame_info.receive_finish_ms;
+
   // Set additional timing info
   frame_timing.frame_construction_delay_ms = frame_info->timing.frame_construction_delay_ms;
   frame_timing.inter_frame_delay_ms = frame_info->timing.inter_frame_delay_ms;
+  frame_timing.encoded_size = frame_info->timing.encoded_size;
 
   // Set frame timing on decoded image
   decodedImage.set_frame_timing(frame_timing);

@@ -1394,52 +1394,24 @@ void RtpVideoStreamReceiver2::LogFrameTimings(
   if (timing.flags != VideoSendTiming::kInvalid) {
     /*
     RTC_LOG(LS_INFO) << "Frame timing:"
+                     << " rtp timestamp=" << rtp_timestamp
                      << " encode_start_delta=" << timing.encode_start_delta_ms
                      << " encode_finish_delta=" << timing.encode_finish_delta_ms
                      << " packetization_finish_delta=" << timing.packetization_finish_delta_ms
                      << " pacer_exit_delta=" << timing.pacer_exit_delta_ms
                      << " network_timestamp_delta=" << timing.network_timestamp_delta_ms
                      << " network2_timestamp_delta=" << timing.network2_timestamp_delta_ms; */
-    current_encode_time_ = timing.encode_finish_delta_ms - timing.encode_start_delta_ms;
   }
 
-  // Convert RTP timestamp to milliseconds (assuming 90kHz clock rate for video)
-  constexpr int kVideoClockRate = 90000;  // 90kHz
-  int64_t rtp_timestamp_ms = (static_cast<int64_t>(rtp_timestamp) * 1000) / kVideoClockRate;
+  int64_t frame_construction_delay_ms = last_packet_received_time - first_packet_received_time;
+  int64_t inter_frame_delay_ms = last_packet_received_time - last_frame_received_time_;
 
-  std::optional<TimeDelta> min_rtt_opt = rtp_rtcp_->MinRtt();
+  timing.frame_construction_delay_ms = frame_construction_delay_ms;
+  timing.inter_frame_delay_ms = inter_frame_delay_ms;
 
-  /*
-  RTC_LOG(LS_INFO) << "Min RTT: " << (min_rtt_opt.has_value() ? min_rtt_opt.value().ms() : -1) 
-                   << "ms, log_counter:" << log_counter_  
-                   << ", current_encode_time:" << current_encode_time_;*/
-
-  if (min_rtt_opt.has_value()) {
-    TimeDelta min_rtt = min_rtt_opt.value();
-    if (log_counter_ < 100) {
-      log_counter_++;
-    } else if (current_encode_time_ > 0) {
-      if (log_counter_ == 100) {
-        // Calculate ntp_timestamp using 2/3 of min_rtt in milliseconds
-        int64_t rtt_adjustment_ms = (min_rtt.ms()) / 2;
-        ntp_timestamp_ = first_packet_received_time - (rtp_timestamp_ms + current_encode_time_) - rtt_adjustment_ms;
-        log_counter_ = 101;
-      } else {
-        int64_t frame_construction_delay_ms = last_packet_received_time - first_packet_received_time;
-        int64_t inter_frame_delay_ms = last_packet_received_time - last_frame_received_time_;
-        int64_t network_delay_ms = last_packet_received_time - (rtp_timestamp_ms + current_encode_time_) - ntp_timestamp_;
-
-        timing.frame_construction_delay_ms = frame_construction_delay_ms;
-        timing.inter_frame_delay_ms = inter_frame_delay_ms;
-        timing.network_delay_ms = network_delay_ms;
-
-        RTC_LOG(LS_INFO) << "Frame delay:"
-                         << " frame_construction_delay=" << frame_construction_delay_ms
-                         << " inter_frame_delay=" << inter_frame_delay_ms
-                         << " e2e_delay=" << network_delay_ms;
-      }
-    }
-  }
+  RTC_LOG(LS_INFO) << "Frame delay:"
+                    << " frame_construction_delay=" << frame_construction_delay_ms
+                    << " inter_frame_delay=" << inter_frame_delay_ms;
 
   last_frame_received_time_ = last_packet_received_time;
 }

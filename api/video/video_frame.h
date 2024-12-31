@@ -34,6 +34,11 @@ class RTC_EXPORT VideoFrame {
 
   // Add your new timing struct
   struct RTC_EXPORT FrameTiming {
+    // Timestamp
+    int64_t first_packet_departure_timestamp;
+    int64_t first_packet_arrival_timestamp;
+    int64_t last_packet_arrival_timestamp;
+
     // Capture to render pipeline timings
     int64_t encode_ms = 0;
     int64_t network_ms = 0; 
@@ -43,6 +48,8 @@ class RTC_EXPORT VideoFrame {
     // Additional timing info
     int64_t frame_construction_delay_ms = 0;
     int64_t inter_frame_delay_ms = 0;
+
+    size_t encoded_size = 0;
   };
 
   // Add getter/setter for the timing info

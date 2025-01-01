@@ -175,19 +175,63 @@ void RTCStatsCollectorCallback::ProcessInboundRTPStats(const webrtc::RTCStats& s
 
     persistent_stats_.frame_timing_count_ += 1;
 
-    RTC_LOG(LS_INFO) << "Frame timing count: " << persistent_stats_.frame_timing_count_;
+    // Extract all stats with null handling
+    int64_t frames_decoded = static_cast<int64_t>(get_numeric("framesDecoded"));
+    int64_t frames_dropped = static_cast<int64_t>(get_numeric("framesDropped"));
+    int64_t frames_received = static_cast<int64_t>(get_numeric("framesReceived"));
+    double framerate = get_numeric("framesPerSecond");
+    double jitter_buffer_delay = get_numeric("jitterBufferDelay") * 1000.0;
+    int64_t width = static_cast<int64_t>(get_numeric("frameWidth"));
+    int64_t height = static_cast<int64_t>(get_numeric("frameHeight"));
+    double total_decode_time = get_numeric("totalDecodeTime") * 1000.0;
+    int64_t bytes_received = static_cast<int64_t>(get_numeric("bytesReceived"));
 
-    if (persistent_stats_.frame_timing_count_%kFrameTimingLogCount == 0) {
-        // Extract all stats with null handling
-        int64_t frames_decoded = static_cast<int64_t>(get_numeric("framesDecoded"));
-        int64_t frames_dropped = static_cast<int64_t>(get_numeric("framesDropped"));
-        int64_t frames_received = static_cast<int64_t>(get_numeric("framesReceived"));
-        double framerate = get_numeric("framesPerSecond");
-        double jitter_buffer_delay = get_numeric("jitterBufferDelay") * 1000.0;
-        int64_t width = static_cast<int64_t>(get_numeric("frameWidth"));
-        int64_t height = static_cast<int64_t>(get_numeric("frameHeight"));
-        double total_decode_time = get_numeric("totalDecodeTime") * 1000.0;
-        int64_t bytes_received = static_cast<int64_t>(get_numeric("bytesReceived"));
+    int64_t current_time_ms = rtc::TimeMillis();
+
+    // Initialize first stats time if not set
+    if (persistent_stats_.first_stats_time_ms_ == -1) {
+        persistent_stats_.first_stats_time_ms_ = current_time_ms;
+        persistent_stats_.period_start_time_ms_ = current_time_ms;
+        persistent_stats_.period_start_bytes_ = bytes_received;
+        persistent_stats_.total_bytes_received_ = bytes_received;
+    }
+
+    // Accumulate values
+    persistent_stats_.acc_frames_decoded_ += frames_decoded;
+    persistent_stats_.acc_frames_dropped_ += frames_dropped;
+    persistent_stats_.acc_frames_received_ += frames_received;
+    persistent_stats_.acc_framerate_ += framerate;
+    persistent_stats_.acc_jitter_buffer_delay_ += jitter_buffer_delay;
+    persistent_stats_.acc_total_decode_time_ += total_decode_time;
+    persistent_stats_.acc_count_++;
+
+    bool should_write = (current_time_ms - persistent_stats_.last_average_time_ms_) >= 1000;  // 1 second interval
+
+    if (should_write && persistent_stats_.acc_count_ > 0) {
+        // Calculate overall average bitrate (since start)
+        double overall_time_sec = (current_time_ms - persistent_stats_.first_stats_time_ms_) / 1000.0;
+        double overall_bytes_delta = bytes_received;
+        double overall_average_bitrate = 0.0;
+        if (overall_time_sec > 0) {
+            overall_average_bitrate = (overall_bytes_delta * 8.0) / overall_time_sec;  // bits per second
+        }
+        persistent_stats_.total_bytes_received_ = bytes_received;
+
+        // Calculate current period average bitrate
+        double period_time_sec = (current_time_ms - persistent_stats_.period_start_time_ms_) / 1000.0;
+        double period_bytes_delta = bytes_received - persistent_stats_.period_start_bytes_;
+        double period_average_bitrate = 0.0;
+        if (period_time_sec > 0) {
+            period_average_bitrate = (period_bytes_delta * 8.0) / period_time_sec;  // bits per second
+        }
+
+        // Calculate averages
+        double avg_frames_decoded = static_cast<double>(persistent_stats_.acc_frames_decoded_) / persistent_stats_.acc_count_;
+        double avg_frames_dropped = static_cast<double>(persistent_stats_.acc_frames_dropped_) / persistent_stats_.acc_count_;
+        double avg_frames_received = static_cast<double>(persistent_stats_.acc_frames_received_) / persistent_stats_.acc_count_;
+        double avg_framerate = persistent_stats_.acc_framerate_ / persistent_stats_.acc_count_;
+        double avg_jitter_buffer_delay = persistent_stats_.acc_jitter_buffer_delay_ / persistent_stats_.acc_count_;
+        double avg_total_decode_time = persistent_stats_.acc_total_decode_time_ / persistent_stats_.acc_count_;
 
         // Handle decoder implementation
         const auto* decoder_impl_attr = find_attribute("decoderImplementation");
@@ -198,22 +242,36 @@ void RTCStatsCollectorCallback::ProcessInboundRTPStats(const webrtc::RTCStats& s
         }
 
         // Write stats to file with mutex protection
-        if (frames_decoded > 0) {
-            if (average_stats_file_.is_open()) {
-                average_stats_file_ << rtc::TimeMillis() << ","
-                        << frames_decoded << ","
-                        << frames_dropped << ","
-                        << frames_received << ","
-                        << framerate << ","
-                        << jitter_buffer_delay << ","
-                        << width << ","
-                        << height << ","
-                        << total_decode_time << ","
-                        << bytes_received << ","
-                        << decoder_implementation << "\n";
-                average_stats_file_.flush();
-            }
+        if (average_stats_file_.is_open()) {
+            average_stats_file_ << current_time_ms << ","
+                    << avg_frames_decoded << ","
+                    << avg_frames_dropped << ","
+                    << avg_frames_received << ","
+                    << avg_framerate << ","
+                    << avg_jitter_buffer_delay << ","
+                    << width << ","
+                    << height << ","
+                    << avg_total_decode_time << ","
+                    << bytes_received << ","
+                    << period_average_bitrate << ","  // Current period bitrate
+                    << overall_average_bitrate << ","  // Overall average bitrate
+                    << decoder_implementation << "\n";
+            average_stats_file_.flush();
         }
+
+        // Reset accumulators
+        persistent_stats_.acc_frames_decoded_ = 0;
+        persistent_stats_.acc_frames_dropped_ = 0;
+        persistent_stats_.acc_frames_received_ = 0;
+        persistent_stats_.acc_framerate_ = 0.0;
+        persistent_stats_.acc_jitter_buffer_delay_ = 0.0;
+        persistent_stats_.acc_total_decode_time_ = 0.0;
+        persistent_stats_.acc_count_ = 0;
+        persistent_stats_.last_average_time_ms_ = current_time_ms;
+
+        // Reset period accumulators
+        persistent_stats_.period_start_time_ms_ = current_time_ms;
+        persistent_stats_.period_start_bytes_ = bytes_received;
     }
 }
 
@@ -318,6 +376,7 @@ bool RTCStatsCollector::OpenStatsFile(const std::string& foldername) {
     std::string average_filename = foldername + "/average_stats.csv";
 
     // Open per-frame stats file
+    /*
     per_frame_stats_file_.open(per_frame_filename);
     if (!per_frame_stats_file_.is_open()) {
         RTC_LOG(LS_ERROR) << "Failed to open per-frame stats file: " << per_frame_filename;
@@ -327,6 +386,7 @@ bool RTCStatsCollector::OpenStatsFile(const std::string& foldername) {
     per_frame_stats_file_ << "timestamp_ms,rtp_timestamp,encoding_ms,network_ms,decoding_ms,rendering_ms,e2e_ms,"
                           << "inter_frame_ms,intra_construction_ms\n";
     per_frame_stats_file_.flush();
+    */
 
     // Open average stats file
     average_stats_file_.open(average_filename);
@@ -338,7 +398,7 @@ bool RTCStatsCollector::OpenStatsFile(const std::string& foldername) {
     RTC_LOG(LS_INFO) << "Average stats file opened successfully: " << average_filename;
     average_stats_file_ << "timestamp_ms,frames_decoded,frames_dropped,frames_received,"
                           << "framerate,jitter_buffer_delay_ms,video_width,video_height,"
-                          << "total_decode_time_ms,bytes_received,decoder_implementation\n";
+                          << "total_decode_time_ms,total_bytes_received,bitrates,overall_avg_bitrates,decoder_implementation\n";
     average_stats_file_.flush();
 
     return true;

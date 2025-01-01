@@ -38,6 +38,8 @@
 #include "rtc_base/logging.h"
 #include "third_party/libyuv/include/libyuv/convert_from.h"
 
+#include <iostream>
+
 namespace {
 
 //
@@ -678,7 +680,6 @@ void GtkMainWnd::VideoRenderer::OnFrame(const webrtc::VideoFrame& video_frame) {
   // FPS Calculation
   if (last_frame_time_ == 0) {
     last_frame_time_ = current_time;
-    bitrate_time_ = current_time;
   }
   
   frame_count_++;
@@ -699,6 +700,7 @@ void GtkMainWnd::VideoRenderer::OnFrame(const webrtc::VideoFrame& video_frame) {
     frame_count_ = 0;
     total_bytes_ = 0;
     last_frame_time_ = current_time;
+    std::cout<<"Frame rate: "<<current_fps_<<", Bitrate: "<<current_bitrate_<<std::endl;
   }
 
   // Log frame metrics
@@ -756,7 +758,7 @@ void GtkMainWnd::VideoRenderer::LogFrameMetrics(const webrtc::VideoFrame& frame)
   int rtp_ms = (frame.rtp_timestamp()/90);
   
   // Initialize offset using first frame's data
-  if (!offset_initialized_ && timing.network_delay_ms > 0 && timing.network_delay_ms < 25) {
+  if (!offset_initialized_ && timing.network_delay_ms > 0) {
     // Calculate offset using RTP timestamp and actual departure time
     // Note: We don't include encode_ms in offset calculation as requested
     rtp_time_offset_ = timing.first_packet_arrival_timestamp - (timing.network_delay_ms - 5) - (rtp_ms + timing.encode_ms); 

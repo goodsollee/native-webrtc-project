@@ -145,7 +145,7 @@ class GtkMainWnd : public MainWindow {
     rtc::scoped_refptr<webrtc::VideoTrackInterface> rendered_track_;
 
     int64_t last_frame_time_;
-    float current_fps_;
+    float current_fps_ = 0.0f;
     int frame_count_;
 
     // For bitrate calculation
@@ -176,7 +176,7 @@ class GtkMainWnd : public MainWindow {
   int height_ = 0;
   rtc::Buffer draw_buffer_;
   int draw_buffer_size_;
-  
+
   // juheon added
   bool headless_ = false;
 };

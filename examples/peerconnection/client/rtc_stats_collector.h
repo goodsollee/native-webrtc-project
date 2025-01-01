@@ -18,6 +18,24 @@ struct PersistentStats {
     int64_t frame_timing_count_ = 0;
     int64_t last_render_time_ms_ = -1;
     int64_t last_timestamp_ = -1;
+
+
+    int64_t acc_frames_decoded_ = 0;
+    int64_t acc_frames_dropped_ = 0;
+    int64_t acc_frames_received_ = 0;
+    double acc_framerate_ = 0.0;
+    double acc_jitter_buffer_delay_ = 0.0;
+    double acc_total_decode_time_ = 0.0;
+    int acc_count_ = 0;  // Count for averaging
+    int64_t last_average_time_ms_ = 0;  // Last time we wrote averages
+
+    // For overall average bitrate
+    int64_t total_bytes_received_ = 0;
+    int64_t first_stats_time_ms_ = -1;  // Time of first stats collection
+    
+    // For current period average bitrate
+    int64_t period_start_bytes_ = 0;
+    int64_t period_start_time_ms_ = 0;
 };
 
 class RTCStatsCollectorCallback : public webrtc::RTCStatsCollectorCallback {
@@ -45,7 +63,7 @@ private:
     std::mutex& stats_mutex_;
     PersistentStats& persistent_stats_;  // Reference to persistent stats
 
-    const int kFrameTimingLogCount = 5; // 60 frames per second
+    //const int kFrameTimingLogCount = 5; // 60 frames per second
 };
 
 class RTCStatsCollector {

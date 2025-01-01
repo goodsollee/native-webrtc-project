@@ -40,6 +40,9 @@ ABSL_FLAG(std::string, y4m_path, "",
 // In flag_defs.h, add:
 ABSL_FLAG(std::string, log_date, "", "Date for log folder (YYYY-MM-DD)");
 
+ABSL_FLAG(bool, headless, false, 
+    "Whether to run in headless or not");
+
 class CustomSocketServer : public rtc::PhysicalSocketServer {
  public:
   explicit CustomSocketServer(GtkMainWnd* wnd)
@@ -115,13 +118,26 @@ Example Commands:
   // Set the usage message
   absl::SetProgramUsageMessage(usage_str);
 
+  absl::ParseCommandLine(argc, argv);
+
   gtk_init(&argc, &argv);
-#if !GLIB_CHECK_VERSION(2, 35, 0)
-  g_type_init();
-#endif
-#if !GLIB_CHECK_VERSION(2, 31, 0)
-  g_thread_init(NULL);
-#endif
+  // juheon added: skip in headless mode
+  if(absl::GetFlag(FLAGS_headless)){
+    printf("headless mode, skip gtk init!\n");
+  }else{
+    printf("init gtk!\n");
+    gtk_init(&argc, &argv);
+  // g_type_init API is deprecated (and does nothing) since glib 2.35.0, see:
+  // https://mail.gnome.org/archives/commits-list/2012-November/msg07809.html
+  #if !GLIB_CHECK_VERSION(2, 35, 0)
+    g_type_init();
+  #endif
+  // g_thread_init API is deprecated since glib 2.31.0, see release note:
+  // http://mail.gnome.org/archives/gnome-announce-list/2011-October/msg00041.html
+  #if !GLIB_CHECK_VERSION(2, 31, 0)
+    g_thread_init(NULL);
+  #endif
+  }
 
   // Parse command line flags
   std::vector<char*> remaining_args = absl::ParseCommandLine(argc, argv);
@@ -149,7 +165,9 @@ Example Commands:
   const std::string server = absl::GetFlag(FLAGS_server);
   GtkMainWnd wnd(server.c_str(), absl::GetFlag(FLAGS_port),
                  absl::GetFlag(FLAGS_autoconnect),
-                 absl::GetFlag(FLAGS_autocall));
+                 absl::GetFlag(FLAGS_autocall),
+                 absl::GetFlag(FLAGS_headless));
+
   wnd.Create();
 
   CustomSocketServer socket_server(&wnd);
@@ -157,7 +175,7 @@ Example Commands:
 
   rtc::InitializeSSL();
   PeerConnectionClient client;
-  auto conductor = rtc::make_ref_counted<Conductor>(&client, &wnd);
+  auto conductor = rtc::make_ref_counted<Conductor>(&client, &wnd, absl::GetFlag(FLAGS_headless));
   conductor->SetRoomId(absl::GetFlag(FLAGS_room_id));
 
   // Get log date - if empty, use current date
@@ -191,6 +209,8 @@ Example Commands:
 
   socket_server.set_client(&client);
   socket_server.set_conductor(conductor.get());
+
+  conductor->Start();
 
   thread.Run();
   wnd.Destroy();

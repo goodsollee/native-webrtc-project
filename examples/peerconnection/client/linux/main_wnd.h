@@ -44,7 +44,8 @@ typedef struct _GdkEventConfigure GdkEventConfigure;
 // implementation.
 class GtkMainWnd : public MainWindow {
  public:
-  GtkMainWnd(const char* server, int port, bool autoconnect, bool autocall);
+  // juheon added
+  GtkMainWnd(const char* server, int port, bool autoconnect, bool autocall, bool headless);
   ~GtkMainWnd();
 
   virtual void RegisterObserver(MainWndCallback* callback);
@@ -117,6 +118,9 @@ class GtkMainWnd : public MainWindow {
 
     int height() const { return height_; }
 
+    // juheon added
+    void SetHeadless(bool headless) { headless_ = headless; }
+
     float fps() const { return current_fps_; }
 
     float bitrate() const { return current_bitrate_; } 
@@ -127,6 +131,10 @@ class GtkMainWnd : public MainWindow {
 
     void InitializeLogging(const std::string& log_folder);
     void LogFrameMetrics(const webrtc::VideoFrame& frame);
+
+    // juheon added
+    bool headless_ = false;
+    int frame_id_ = 0;
 
    protected:
     void SetSize(int width, int height);
@@ -168,6 +176,9 @@ class GtkMainWnd : public MainWindow {
   int height_ = 0;
   rtc::Buffer draw_buffer_;
   int draw_buffer_size_;
+  
+  // juheon added
+  bool headless_ = false;
 };
 
 #endif  // EXAMPLES_PEERCONNECTION_CLIENT_LINUX_MAIN_WND_H_

@@ -153,7 +153,8 @@ gboolean Draw(GtkWidget* widget, cairo_t* cr, gpointer data) {
 GtkMainWnd::GtkMainWnd(const char* server,
                        int port,
                        bool autoconnect,
-                       bool autocall)
+                       bool autocall,
+                       bool headless)
     : window_(NULL),
       draw_area_(NULL),
       vbox_(NULL),
@@ -163,7 +164,8 @@ GtkMainWnd::GtkMainWnd(const char* server,
       callback_(NULL),
       server_(server),
       autoconnect_(autoconnect),
-      autocall_(autocall) {
+      autocall_(autocall),
+      headless_(headless) {
   char buffer[10];
   snprintf(buffer, sizeof(buffer), "%i", port);
   port_ = buffer;
@@ -175,10 +177,16 @@ GtkMainWnd::~GtkMainWnd() {
 
 void GtkMainWnd::RegisterObserver(MainWndCallback* callback) {
   callback_ = callback;
+  // juheon added: in headless mode, call SwitchToConnectUI() once more for autoconnection
+  if(headless_){
+    SwitchToConnectUI();
+  }
 }
 
 bool GtkMainWnd::IsWindow() {
-  return window_ != NULL && GTK_IS_WINDOW(window_);
+  // juheon added: in headless mode, always return true
+  if(headless_) return true;
+  else  return window_ != NULL && GTK_IS_WINDOW(window_);
 }
 
 void GtkMainWnd::MessageBox(const char* caption,
@@ -205,6 +213,8 @@ MainWindow::UI GtkMainWnd::current_ui() {
 
 void GtkMainWnd::StartLocalRenderer(webrtc::VideoTrackInterface* local_video) {
   local_renderer_.reset(new VideoRenderer(this, local_video));
+  // juheon added: set renderer in headless mode
+  local_renderer_->SetHeadless(headless_);
 }
 
 void GtkMainWnd::StopLocalRenderer() {
@@ -214,6 +224,8 @@ void GtkMainWnd::StopLocalRenderer() {
 void GtkMainWnd::StartRemoteRenderer(
     webrtc::VideoTrackInterface* remote_video) {
   remote_renderer_.reset(new VideoRenderer(this, remote_video));
+  // juheon added: sent renderer in headless mode
+  remote_renderer_->SetHeadless(headless_);
 }
 
 void GtkMainWnd::StopRemoteRenderer() {
@@ -226,165 +238,198 @@ void GtkMainWnd::QueueUIThreadCallback(int msg_id, void* data) {
 }
 
 bool GtkMainWnd::Create() {
-  RTC_DCHECK(window_ == NULL);
+  // juheon added: trigger this only when not in headless mode
+  if(headless_){
+    RTC_LOG(LS_INFO) << "headless mode, do not create window!\n";
+    // SwitchToConnectUI(); // no use doing this here.. don't have callback now
+    return true;
+  }else{
+    RTC_DCHECK(window_ == NULL);
 
-  window_ = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-  if (window_) {
-    gtk_window_set_position(GTK_WINDOW(window_), GTK_WIN_POS_CENTER);
-    gtk_window_set_default_size(GTK_WINDOW(window_), 640, 480);
-    gtk_window_set_title(GTK_WINDOW(window_), "PeerConnection client");
-    g_signal_connect(G_OBJECT(window_), "delete-event",
-                     G_CALLBACK(&OnDestroyedCallback), this);
-    g_signal_connect(window_, "key-press-event", G_CALLBACK(OnKeyPressCallback),
-                     this);
-    g_signal_connect(G_OBJECT(window_), "configure-event",
-                   G_CALLBACK(&OnConfigureCallback), this);
+    window_ = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    if (window_) {
+      gtk_window_set_position(GTK_WINDOW(window_), GTK_WIN_POS_CENTER);
+      gtk_window_set_default_size(GTK_WINDOW(window_), 640, 480);
+      gtk_window_set_title(GTK_WINDOW(window_), "PeerConnection client");
+      g_signal_connect(G_OBJECT(window_), "delete-event",
+                      G_CALLBACK(&OnDestroyedCallback), this);
+      g_signal_connect(window_, "key-press-event", G_CALLBACK(OnKeyPressCallback),
+                      this);
 
-    // Initialize default size
-    desired_width_ = 640;
-    desired_height_ = 480;
-    scale_ = 1.0;
-    window_resizing_ = false;
+      SwitchToConnectUI();
+    }
 
-    SwitchToConnectUI();
+    return window_ != NULL;
   }
-
-  return window_ != NULL;
 }
 
 bool GtkMainWnd::Destroy() {
-  if (!IsWindow())
-    return false;
+  // juheon added: skip in headless mode
+  if(headless_){
+    return true;
+  }else{
+    if (!IsWindow())
+      return false;
 
-  gtk_widget_destroy(window_);
-  window_ = NULL;
+    gtk_widget_destroy(window_);
+    window_ = NULL;
 
-  return true;
+    return true;
+  }
 }
 
 void GtkMainWnd::SwitchToConnectUI() {
-  RTC_LOG(LS_INFO) << __FUNCTION__;
+  if(headless_){ // juheon added: in headless mode: make connection right away
+    int port = port_.length() ? atoi(port_.c_str()) : 0;
+    RTC_LOG(LS_INFO) << "server: " << server_ << "port: " << port << "\n";
+    if(callback_){
+      callback_->StartLogin(server_, port);
+    }else{
+      RTC_LOG(LS_INFO) << "null callback!\n";
+    }
+  }else{
+    RTC_LOG(LS_INFO) << __FUNCTION__;
 
-  RTC_DCHECK(IsWindow());
-  RTC_DCHECK(vbox_ == NULL);
+    RTC_DCHECK(IsWindow());
+    RTC_DCHECK(vbox_ == NULL);
 
-  gtk_container_set_border_width(GTK_CONTAINER(window_), 10);
+    gtk_container_set_border_width(GTK_CONTAINER(window_), 10);
 
-  if (peer_list_) {
-    gtk_widget_destroy(peer_list_);
-    peer_list_ = NULL;
+    if (peer_list_) {
+      gtk_widget_destroy(peer_list_);
+      peer_list_ = NULL;
+    }
+
+    vbox_ = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    GtkWidget* valign = gtk_alignment_new(0, 1, 0, 0);
+    gtk_container_add(GTK_CONTAINER(vbox_), valign);
+    gtk_container_add(GTK_CONTAINER(window_), vbox_);
+
+    GtkWidget* hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+
+    GtkWidget* label = gtk_label_new("Server");
+    gtk_container_add(GTK_CONTAINER(hbox), label);
+
+    server_edit_ = gtk_entry_new();
+    gtk_entry_set_text(GTK_ENTRY(server_edit_), server_.c_str());
+    gtk_widget_set_size_request(server_edit_, 400, 30);
+    gtk_container_add(GTK_CONTAINER(hbox), server_edit_);
+
+    port_edit_ = gtk_entry_new();
+    gtk_entry_set_text(GTK_ENTRY(port_edit_), port_.c_str());
+    gtk_widget_set_size_request(port_edit_, 70, 30);
+    gtk_container_add(GTK_CONTAINER(hbox), port_edit_);
+
+    GtkWidget* button = gtk_button_new_with_label("Connect");
+    gtk_widget_set_size_request(button, 70, 30);
+    g_signal_connect(button, "clicked", G_CALLBACK(OnClickedCallback), this);
+    gtk_container_add(GTK_CONTAINER(hbox), button);
+
+    GtkWidget* halign = gtk_alignment_new(1, 0, 0, 0);
+    gtk_container_add(GTK_CONTAINER(halign), hbox);
+    gtk_box_pack_start(GTK_BOX(vbox_), halign, FALSE, FALSE, 0);
+
+    gtk_widget_show_all(window_);
+
+    if (autoconnect_)
+      g_idle_add(SimulateButtonClick, button);
   }
-
-  vbox_ = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
-  GtkWidget* valign = gtk_alignment_new(0, 1, 0, 0);
-  gtk_container_add(GTK_CONTAINER(vbox_), valign);
-  gtk_container_add(GTK_CONTAINER(window_), vbox_);
-
-  GtkWidget* hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
-
-  GtkWidget* label = gtk_label_new("Server");
-  gtk_container_add(GTK_CONTAINER(hbox), label);
-
-  server_edit_ = gtk_entry_new();
-  gtk_entry_set_text(GTK_ENTRY(server_edit_), server_.c_str());
-  gtk_widget_set_size_request(server_edit_, 400, 30);
-  gtk_container_add(GTK_CONTAINER(hbox), server_edit_);
-
-  port_edit_ = gtk_entry_new();
-  gtk_entry_set_text(GTK_ENTRY(port_edit_), port_.c_str());
-  gtk_widget_set_size_request(port_edit_, 70, 30);
-  gtk_container_add(GTK_CONTAINER(hbox), port_edit_);
-
-  GtkWidget* button = gtk_button_new_with_label("Connect");
-  gtk_widget_set_size_request(button, 70, 30);
-  g_signal_connect(button, "clicked", G_CALLBACK(OnClickedCallback), this);
-  gtk_container_add(GTK_CONTAINER(hbox), button);
-
-  GtkWidget* halign = gtk_alignment_new(1, 0, 0, 0);
-  gtk_container_add(GTK_CONTAINER(halign), hbox);
-  gtk_box_pack_start(GTK_BOX(vbox_), halign, FALSE, FALSE, 0);
-
-  gtk_widget_show_all(window_);
-
-  if (autoconnect_)
-    g_idle_add(SimulateButtonClick, button);
 }
 
 void GtkMainWnd::SwitchToPeerList(const Peers& peers) {
-  RTC_LOG(LS_INFO) << __FUNCTION__;
+  if(headless_){
+    if (peers.begin() != peers.end()){
+      if(autocall_){
+        // juheon added: in headless mode, make connection from peers right away
+        int id = 2; // temp: this should be replaced with the output of gtk_tree_model_get(model, &iter, 0, &text, 1, &id, -1);
+        RTC_LOG(LS_INFO) << "(headless) Connect to peer " << id << "\n";
+        callback_->ConnectToPeer(id);
+      }//else{
+      //  RTC_LOG(LS_INFO) << "not in autocall mode\n";
+      //}
+    }else{
+      RTC_LOG(LS_INFO) << "no peers to connect!\n";
+    }
+  }else{
+    RTC_LOG(LS_INFO) << __FUNCTION__;
 
-  if (!peer_list_) {
-    gtk_container_set_border_width(GTK_CONTAINER(window_), 0);
-    if (vbox_) {
-      gtk_widget_destroy(vbox_);
-      vbox_ = NULL;
-      server_edit_ = NULL;
-      port_edit_ = NULL;
-    } else if (draw_area_) {
-      gtk_widget_destroy(draw_area_);
-      draw_area_ = NULL;
-      draw_buffer_.SetSize(0);
+    if (!peer_list_) {
+      gtk_container_set_border_width(GTK_CONTAINER(window_), 0);
+      if (vbox_) {
+        gtk_widget_destroy(vbox_);
+        vbox_ = NULL;
+        server_edit_ = NULL;
+        port_edit_ = NULL;
+      } else if (draw_area_) {
+        gtk_widget_destroy(draw_area_);
+        draw_area_ = NULL;
+        draw_buffer_.SetSize(0);
+      }
+
+      peer_list_ = gtk_tree_view_new();
+      g_signal_connect(peer_list_, "row-activated",
+                      G_CALLBACK(OnRowActivatedCallback), this);
+      gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(peer_list_), FALSE);
+      InitializeList(peer_list_);
+      gtk_container_add(GTK_CONTAINER(window_), peer_list_);
+      gtk_widget_show_all(window_);
+    } else {
+      GtkListStore* store =
+          GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(peer_list_)));
+      gtk_list_store_clear(store);
     }
 
-    peer_list_ = gtk_tree_view_new();
-    g_signal_connect(peer_list_, "row-activated",
-                     G_CALLBACK(OnRowActivatedCallback), this);
-    gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(peer_list_), FALSE);
-    InitializeList(peer_list_);
-    gtk_container_add(GTK_CONTAINER(window_), peer_list_);
-    gtk_widget_show_all(window_);
-  } else {
-    GtkListStore* store =
-        GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(peer_list_)));
-    gtk_list_store_clear(store);
+    AddToList(peer_list_, "List of currently connected peers:", -1);
+    for (Peers::const_iterator i = peers.begin(); i != peers.end(); ++i)
+      AddToList(peer_list_, i->second.c_str(), i->first);
+
+    if (autocall_ && peers.begin() != peers.end())
+      g_idle_add(SimulateLastRowActivated, peer_list_);
   }
-
-  AddToList(peer_list_, "List of currently connected peers:", -1);
-  for (Peers::const_iterator i = peers.begin(); i != peers.end(); ++i)
-    AddToList(peer_list_, i->second.c_str(), i->first);
-
-  if (autocall_ && peers.begin() != peers.end())
-    g_idle_add(SimulateLastRowActivated, peer_list_);
 }
 
 void GtkMainWnd::SwitchToStreamingUI() {
   RTC_LOG(LS_INFO) << "SwitchToStreamingUI: Current UI state=" << current_ui()
                    << ", draw_area_=" << (draw_area_ ? "exists" : "null");
-
-  // First clean up any existing UI elements
-  if (vbox_) {
-    gtk_container_remove(GTK_CONTAINER(window_), vbox_);
-    gtk_widget_destroy(vbox_);
-    vbox_ = NULL;
-    server_edit_ = NULL; 
-    port_edit_ = NULL;
+  if (headless_){
+    RTC_LOG(LS_INFO) << "headless mode, skip!";
   }
-  
-  if (draw_area_) {
-    gtk_widget_destroy(draw_area_);
-    draw_area_ = NULL;
+  else {
+    // First clean up any existing UI elements
+    if (vbox_) {
+      gtk_container_remove(GTK_CONTAINER(window_), vbox_);
+      gtk_widget_destroy(vbox_);
+      vbox_ = NULL;
+      server_edit_ = NULL; 
+      port_edit_ = NULL;
+    }
+    
+    if (draw_area_) {
+      gtk_widget_destroy(draw_area_);
+      draw_area_ = NULL;
+    }
+    
+    if (peer_list_) {
+      gtk_container_remove(GTK_CONTAINER(window_), peer_list_);
+      gtk_widget_destroy(peer_list_);
+      peer_list_ = NULL;
+    }
+
+    gtk_container_set_border_width(GTK_CONTAINER(window_), 0);
+
+    // Set fixed window size
+    desired_width_ = 1280;  // Set your desired fixed width
+    desired_height_ = 720; // Set your desired fixed height
+    gtk_window_set_resizable(GTK_WINDOW(window_), FALSE); // Prevent resizing
+
+    draw_area_ = gtk_drawing_area_new();
+    // Set the drawing area to maintain fixed size
+    gtk_widget_set_size_request(draw_area_, desired_width_, desired_height_);
+    gtk_container_add(GTK_CONTAINER(window_), draw_area_);
+    g_signal_connect(G_OBJECT(draw_area_), "draw", G_CALLBACK(&::Draw), this);
+
+    gtk_widget_show_all(window_);
   }
-  
-  if (peer_list_) {
-    gtk_container_remove(GTK_CONTAINER(window_), peer_list_);
-    gtk_widget_destroy(peer_list_);
-    peer_list_ = NULL;
-  }
-
-  gtk_container_set_border_width(GTK_CONTAINER(window_), 0);
-
-  // Set fixed window size
-  desired_width_ = 1280;  // Set your desired fixed width
-  desired_height_ = 720; // Set your desired fixed height
-  gtk_window_set_resizable(GTK_WINDOW(window_), FALSE); // Prevent resizing
-
-  draw_area_ = gtk_drawing_area_new();
-  // Set the drawing area to maintain fixed size
-  gtk_widget_set_size_request(draw_area_, desired_width_, desired_height_);
-  gtk_container_add(GTK_CONTAINER(window_), draw_area_);
-  g_signal_connect(G_OBJECT(draw_area_), "draw", G_CALLBACK(&::Draw), this);
-
-  gtk_widget_show_all(window_);
 }
 
 void GtkMainWnd::OnDestroyed(GtkWidget* widget, GdkEvent* event) {
@@ -605,6 +650,26 @@ void GtkMainWnd::VideoRenderer::SetSize(int width, int height) {
   gdk_threads_leave();
 }
 
+// juheon added: print current time to check frame interval
+#include <ctime>  
+#include <sys/time.h>
+
+void print_current_time(){
+    struct timeval time_now{};
+    gettimeofday(&time_now, nullptr);
+
+    long int sec = static_cast<long int>(time_now.tv_sec)%86400;
+    long int usec = static_cast<long int>(time_now.tv_usec);
+
+    long int hour = (sec/3600 + 9)%24;
+    long int min = (sec%3600)/60;
+    long int s = (sec%3600)%60;
+    long int ms = usec/1000;
+
+    //std::cout<<hour<<":"<<min<<":"<<s<<"."<<ms<<", ";
+    printf("%ld:%ld:%ld.%ld, ", hour, min, s, ms);
+}
+
 void GtkMainWnd::VideoRenderer::OnFrame(const webrtc::VideoFrame& video_frame) {
   gdk_threads_enter();
 
@@ -639,25 +704,27 @@ void GtkMainWnd::VideoRenderer::OnFrame(const webrtc::VideoFrame& video_frame) {
   // Log frame metrics
   LogFrameMetrics(video_frame);
 
-  rtc::scoped_refptr<webrtc::I420BufferInterface> buffer(
-      video_frame.video_frame_buffer()->ToI420());
-  if (video_frame.rotation() != webrtc::kVideoRotation_0) {
-    buffer = webrtc::I420Buffer::Rotate(*buffer, video_frame.rotation());
+  if (!headless_) {
+    rtc::scoped_refptr<webrtc::I420BufferInterface> buffer(
+        video_frame.video_frame_buffer()->ToI420());
+    if (video_frame.rotation() != webrtc::kVideoRotation_0) {
+      buffer = webrtc::I420Buffer::Rotate(*buffer, video_frame.rotation());
+    }
+
+    // Keep original video dimensions
+    SetSize(buffer->width(), buffer->height());
+
+    libyuv::I420ToARGB(buffer->DataY(), buffer->StrideY(),
+                      buffer->DataU(), buffer->StrideU(), 
+                      buffer->DataV(), buffer->StrideV(),
+                      image_.data(), width_ * 4,
+                      buffer->width(), buffer->height());
+
+    gdk_threads_leave();
+
+    // This will trigger a redraw with the current scale
+    g_idle_add(Redraw, main_wnd_);
   }
-
-  // Keep original video dimensions
-  SetSize(buffer->width(), buffer->height());
-
-  libyuv::I420ToARGB(buffer->DataY(), buffer->StrideY(),
-                     buffer->DataU(), buffer->StrideU(), 
-                     buffer->DataV(), buffer->StrideV(),
-                     image_.data(), width_ * 4,
-                     buffer->width(), buffer->height());
-
-  gdk_threads_leave();
-
-  // This will trigger a redraw with the current scale
-  g_idle_add(Redraw, main_wnd_);
 }
 
 void GtkMainWnd::VideoRenderer::InitializeLogging(const std::string& log_folder) {

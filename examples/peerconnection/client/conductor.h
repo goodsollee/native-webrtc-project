@@ -65,7 +65,9 @@ class Conductor : public webrtc::PeerConnectionObserver,
   };
 
 
-  Conductor(PeerConnectionClient* client, MainWindow* main_wnd);
+  Conductor(PeerConnectionClient* client, MainWindow* main_wnd, bool headless);
+
+  void Start();
 
   bool connection_active() const;
 
@@ -80,6 +82,9 @@ class Conductor : public webrtc::PeerConnectionObserver,
   void SetNetInterface(std::string interface_name);
 
   void SetY4mPath(const std::string& path) { y4m_path_ = path; }
+
+  // juheon added
+  void SetHeadless(bool headless) { headless_ = headless; }
 
   void SetLogDirectory(const std::string& log_dir) { log_dir_ = log_dir; }
 
@@ -198,18 +203,21 @@ class Conductor : public webrtc::PeerConnectionObserver,
   std::string y4m_path_;
   std::string log_dir_;
 
+  // juheon added
+  bool headless_ = false;
+
   void StopStats ();
   void GetReceiverVideoStats();
 
   std::unique_ptr<RTCStatsCollector> stats_collector_;
 
   using StatsCallback = std::function<void(StatsType type, const std::string& message)>;
-using RateCallback = std::function<void(double bitrate_bps, double framerate_fps)>;
-using ResolutionCallback = std::function<void(int width, int height)>;
+  using RateCallback = std::function<void(double bitrate_bps, double framerate_fps)>;
+  using ResolutionCallback = std::function<void(int width, int height)>;
 
-StatsCallback stats_callback_;
-RateCallback rate_callback_;
-ResolutionCallback resolution_callback_;
+  StatsCallback stats_callback_;
+  RateCallback rate_callback_;
+  ResolutionCallback resolution_callback_;
 
 };
 

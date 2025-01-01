@@ -219,16 +219,19 @@ private:
 
 bool Conductor::curl_initialized_ = false;
 
-Conductor::Conductor(PeerConnectionClient* client, MainWindow* main_wnd)
-    : peer_id_(-1), loopback_(false), client_(client), main_wnd_(main_wnd), curl_(nullptr), 
+Conductor::Conductor(PeerConnectionClient* client, MainWindow* main_wnd, bool headless)
+    : peer_id_(-1), loopback_(false), client_(client), main_wnd_(main_wnd), curl_(nullptr), headless_(headless), 
       stats_collector_(nullptr) {
-  client_->RegisterObserver(this);
-  main_wnd->RegisterObserver(this);
 }
 
 Conductor::~Conductor() {
   RTC_DCHECK(!peer_connection_);
   CleanupCurl();
+}
+
+void Conductor::Start () {
+  client_->RegisterObserver(this);
+  main_wnd_->RegisterObserver(this);
 }
 
 bool Conductor::connection_active() const {
@@ -467,8 +470,12 @@ void Conductor::EnsureStreamingUI() {
     
     if (main_wnd_->IsWindow()) {
         if (main_wnd_->current_ui() != MainWindow::STREAMING) {
-            RTC_LOG(LS_INFO) << "Switching to streaming UI";
-            main_wnd_->SwitchToStreamingUI();
+            // juheon added: turn on streaming UI when not in headless mode
+            if(headless_){
+              RTC_LOG(LS_INFO) << "Headless mode, skip streaming UI";
+            } else{
+              main_wnd_->SwitchToStreamingUI();
+            }
         }
     }
 }
@@ -582,8 +589,11 @@ void Conductor::OnDisconnected() {
 void Conductor::OnPeerConnected(int id, const std::string& name) {
   RTC_LOG(LS_INFO) << __FUNCTION__;
   // Refresh the list if we're showing it.
-  if (main_wnd_->current_ui() == MainWindow::LIST_PEERS)
+  //if (main_wnd_->current_ui() == MainWindow::LIST_PEERS)
+  //  main_wnd_->SwitchToPeerList(client_->peers());
+  if(true){ // juheon modified: always trigger this
     main_wnd_->SwitchToPeerList(client_->peers());
+  }
 }
 
 void Conductor::OnPeerDisconnected(int id) {
@@ -996,7 +1006,12 @@ void Conductor::AddTracks() {
   // If we're in receiver-only mode, don't add any local tracks
   if (!is_sender_) {
     RTC_LOG(LS_INFO) << "Operating in receiver-only mode";
-    main_wnd_->SwitchToStreamingUI();
+    // juheon added: turn on streaming UI when not in headless mode
+    if(headless_){
+      RTC_LOG(LS_INFO) << "Headless mode, skip streaming UI";
+    } else{
+      main_wnd_->SwitchToStreamingUI();
+    }
     return;
   }
 
@@ -1064,7 +1079,9 @@ void Conductor::AddTracks() {
         rtc::scoped_refptr<webrtc::VideoTrackInterface> video_track =
             peer_connection_factory_->CreateVideoTrack(kVideoLabel, video_source.get());
 
-        main_wnd_->StartLocalRenderer(video_track.get());
+        if (!headless_) {
+          main_wnd_->StartLocalRenderer(video_track.get());
+        }
 
         auto result_or_error = peer_connection_->AddTrack(video_track, {kStreamId});
         if (result_or_error.ok()) {
@@ -1156,7 +1173,10 @@ void Conductor::AddTracks() {
     if (video_device) {
       rtc::scoped_refptr<webrtc::VideoTrackInterface> video_track_(
           peer_connection_factory_->CreateVideoTrack(video_device, kVideoLabel));
-      main_wnd_->StartLocalRenderer(video_track_.get());
+      
+      if (!headless_) {
+        main_wnd_->StartLocalRenderer(video_track_.get());
+      }
 
       auto result_or_error = peer_connection_->AddTrack(video_track_, {kStreamId});
       if (!result_or_error.ok()) {
@@ -1167,8 +1187,14 @@ void Conductor::AddTracks() {
       RTC_LOG(LS_ERROR) << "OpenVideoCaptureDevice failed";
     }
   }
-
-  main_wnd_->SwitchToStreamingUI();
+  //main_wnd_->SwitchToStreamingUI();
+  // juheon added: turn on streaming UI when not in headless mode
+  if(headless_){
+    RTC_LOG(LS_INFO) << "Headless mode, skip streaming UI";
+  } else{
+    RTC_LOG(LS_INFO) << "Headless mode? "<< headless_;
+    main_wnd_->SwitchToStreamingUI();
+  }
 }
 
 void Conductor::DisconnectFromCurrentPeer() {

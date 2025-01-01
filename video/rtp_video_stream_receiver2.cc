@@ -1409,6 +1409,14 @@ void RtpVideoStreamReceiver2::LogFrameTimings(
   timing.frame_construction_delay_ms = frame_construction_delay_ms;
   timing.inter_frame_delay_ms = inter_frame_delay_ms;
 
+  std::optional<TimeDelta> rtt = rtp_rtcp_->MinRtt();
+  if (rtt.has_value()) {
+    timing.network_delay_ms = rtt->ms();
+  } else {
+      // Handle the case where RTT is not yet available
+      timing.network_delay_ms = 0;  // or some default value
+      // Or possibly skip setting this value until RTT is available
+  }
   RTC_LOG(LS_INFO) << "Frame delay:"
                     << " frame_construction_delay=" << frame_construction_delay_ms
                     << " inter_frame_delay=" << inter_frame_delay_ms;

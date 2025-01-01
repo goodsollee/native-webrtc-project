@@ -48,6 +48,7 @@ class RTC_EXPORT VideoFrame {
     // Additional timing info
     int64_t frame_construction_delay_ms = 0;
     int64_t inter_frame_delay_ms = 0;
+    int64_t network_delay_ms = 0;
 
     size_t encoded_size = 0;
   };

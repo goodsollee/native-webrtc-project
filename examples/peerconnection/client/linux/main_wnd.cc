@@ -686,10 +686,10 @@ void GtkMainWnd::VideoRenderer::LogFrameMetrics(const webrtc::VideoFrame& frame)
   int64_t current_time = rtc::TimeMillis();
 
   // Calculate RTP timestamp in milliseconds (90kHz clock -> ms)
-  int64_t rtp_ms = frame.rtp_timestamp() * 1000 / 90000;
+  int rtp_ms = (frame.rtp_timestamp()/90);
   
   // Initialize offset using first frame's data
-  if (!offset_initialized_ && timing.network_delay_ms > 0) {
+  if (!offset_initialized_ && timing.network_delay_ms > 0 && timing.network_delay_ms < 25) {
     // Calculate offset using RTP timestamp and actual departure time
     // Note: We don't include encode_ms in offset calculation as requested
     rtp_time_offset_ = timing.first_packet_arrival_timestamp - (timing.network_delay_ms - 5) - (rtp_ms + timing.encode_ms); 
@@ -698,8 +698,8 @@ void GtkMainWnd::VideoRenderer::LogFrameMetrics(const webrtc::VideoFrame& frame)
 
   if (offset_initialized_) {
     // Calculate estimated departure and network delay
-    int64_t estimated_departure = rtp_ms + rtp_time_offset_ + timing.encode_ms; // rtp_ms + offset --> capture time
-    int64_t estimated_network_ms = timing.last_packet_arrival_timestamp - estimated_departure;
+    int estimated_departure = rtp_ms + rtp_time_offset_ + timing.encode_ms; // rtp_ms + offset --> capture time
+    int estimated_network_ms = timing.last_packet_arrival_timestamp - estimated_departure;
 
     frame_log_file_ << current_time << ","
                     << frame.rtp_timestamp() << ","

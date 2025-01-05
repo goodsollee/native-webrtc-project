@@ -785,7 +785,7 @@ void GtkMainWnd::VideoRenderer::LogFrameMetrics(const webrtc::VideoFrame& frame)
                     << timing.inter_frame_delay_ms << ","
                     << timing.encoded_size << ","  
                     << frame.width() << ","  
-                    << fraem.height() << "," 
+                    << frame.height() << "," 
                     << timing.network_delay_ms<< "\n";  
   }
   

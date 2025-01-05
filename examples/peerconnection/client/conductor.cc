@@ -991,6 +991,7 @@ void Conductor::AddTracks() {
     return;  // Already added tracks.
   }
 
+  /*
   rtc::scoped_refptr<webrtc::AudioTrackInterface> audio_track(
       peer_connection_factory_->CreateAudioTrack(
           kAudioLabel,
@@ -1001,7 +1002,7 @@ void Conductor::AddTracks() {
     RTC_LOG(LS_ERROR) << "Failed to add audio track to PeerConnection: "
                       << result_or_error.error().message();
   }
-
+  */
 
   // If we're in receiver-only mode, don't add any local tracks
   if (!is_sender_) {

@@ -742,7 +742,7 @@ void GtkMainWnd::VideoRenderer::InitializeLogging(const std::string& log_folder)
     frame_log_file_ << "timestamp,rtp_timestamp,first_packet_departure,estimated_first_packet_departure,first_packet_arrival,last_packet_arrival,render,"
                     << "encode_ms,network_ms,estimated_network_ms,decode_ms,"
                     << "frame_construction_delay_ms,inter_frame_delay_ms,"
-                    << "encoded_size,min_rtt\n";
+                    << "encoded_size,height,width,min_rtt\n";
     logging_initialized_ = true;
   }
 }
@@ -758,7 +758,7 @@ void GtkMainWnd::VideoRenderer::LogFrameMetrics(const webrtc::VideoFrame& frame)
   int rtp_ms = (frame.rtp_timestamp()/90);
   
   // Initialize offset using first frame's data
-  if (!offset_initialized_ && timing.network_delay_ms > 0) {
+  if (!offset_initialized_ && timing.network_delay_ms > 0 && timing.network_delay_ms < 25) {
     // Calculate offset using RTP timestamp and actual departure time
     // Note: We don't include encode_ms in offset calculation as requested
     rtp_time_offset_ = timing.first_packet_arrival_timestamp - (timing.network_delay_ms - 5) - (rtp_ms + timing.encode_ms); 
@@ -783,8 +783,10 @@ void GtkMainWnd::VideoRenderer::LogFrameMetrics(const webrtc::VideoFrame& frame)
                     << timing.decode_ms << ","
                     << timing.frame_construction_delay_ms << ","
                     << timing.inter_frame_delay_ms << ","
-                    << timing.encoded_size << ","  // New column
-                    << timing.network_delay_ms<< "\n";  // New column
+                    << timing.encoded_size << ","  
+                    << frame.width() << ","  
+                    << fraem.height() << "," 
+                    << timing.network_delay_ms<< "\n";  
   }
   
   // Flush to ensure data is written immediately

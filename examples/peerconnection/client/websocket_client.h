@@ -7,6 +7,8 @@
 #include <memory>
 #include <libwebsockets.h>
 #include <deque>
+#include <chrono>
+
 #include "rtc_base/thread.h"
 
 #include "json/reader.h"
@@ -41,6 +43,14 @@ class WebSocketClient {
 
   void Service();
   bool ParseURL(const std::string& url);
+
+  // New: Send periodic ping
+  bool SendPing();
+
+  // Keep-alive
+  std::chrono::steady_clock::time_point last_ping_time_ =
+      std::chrono::steady_clock::now();
+  const std::chrono::seconds ping_interval_{30};  // 30-second keepalive
 
  private:
   void HandleCallback(struct lws *wsi, 

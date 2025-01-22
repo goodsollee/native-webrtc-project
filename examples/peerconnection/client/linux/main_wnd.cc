@@ -677,6 +677,11 @@ void GtkMainWnd::VideoRenderer::OnFrame(const webrtc::VideoFrame& video_frame) {
 
   int64_t current_time = rtc::TimeMillis();
 
+  // Initialize start time with first frame
+  if (start_time_ == 0) {
+    start_time_ = current_time;
+  }
+
   // FPS Calculation
   if (last_frame_time_ == 0) {
     last_frame_time_ = current_time;
@@ -700,7 +705,11 @@ void GtkMainWnd::VideoRenderer::OnFrame(const webrtc::VideoFrame& video_frame) {
     frame_count_ = 0;
     total_bytes_ = 0;
     last_frame_time_ = current_time;
-    std::cout<<"Frame rate: "<<current_fps_<<", Bitrate: "<<current_bitrate_<<std::endl;
+
+    // Calculate elapsed time in seconds since start
+    double elapsed_seconds = (current_time - start_time_) / 1000.0;
+    std::cout << "Elapsed time: " << elapsed_seconds << "s, Frame rate: " 
+              << current_fps_ << ", Bitrate: " << current_bitrate_ << std::endl;
   }
 
   // Log frame metrics
@@ -740,9 +749,10 @@ void GtkMainWnd::VideoRenderer::InitializeLogging(const std::string& log_folder)
   if (frame_log_file_.is_open()) {
     // Write CSV header
     frame_log_file_ << "timestamp,rtp_timestamp,first_packet_departure,estimated_first_packet_departure,first_packet_arrival,last_packet_arrival,render,"
-                    << "encode_ms,network_ms,estimated_network_ms,decode_ms,"
+                    << "encode_ms,pacing_ms,network_ms,estimated_network_ms,decode_ms,"
                     << "frame_construction_delay_ms,inter_frame_delay_ms,"
-                    << "encoded_size,height,width,min_rtt\n";
+                    << "inter_frame_departure_ms,frame_jitter_ms,"  // New columns
+                    << "encoded_size,height,width,min_rtt,avail_bw\n";
     logging_initialized_ = true;
   }
 }
@@ -756,9 +766,28 @@ void GtkMainWnd::VideoRenderer::LogFrameMetrics(const webrtc::VideoFrame& frame)
 
   // Calculate RTP timestamp in milliseconds (90kHz clock -> ms)
   int rtp_ms = (frame.rtp_timestamp()/90);
+
+  // Calculate inter-frame departure time
+  int64_t inter_frame_departure_ms = 0;
+  if (!first_frame_ && last_departure_ts_ > 0) {
+    inter_frame_departure_ms = timing.first_packet_departure_timestamp - last_departure_ts_;
+  }
+  last_departure_ts_ = timing.first_packet_departure_timestamp;
+
+  // Calculate frame-level jitter (difference between inter-arrival and inter-departure times)
+  int64_t frame_jitter_ms = 0;
+  if (!first_frame_ && last_arrival_ts_ > 0) {
+    int64_t inter_frame_arrival_ms = timing.last_packet_arrival_timestamp - last_arrival_ts_;
+    frame_jitter_ms = inter_frame_arrival_ms - inter_frame_departure_ms;
+  }
+  last_arrival_ts_ = timing.last_packet_arrival_timestamp;
+
+  if (first_frame_) {
+    first_frame_ = false;
+  }
   
   // Initialize offset using first frame's data
-  if (!offset_initialized_ && timing.network_delay_ms > 0 && timing.network_delay_ms < 25) {
+  if (!offset_initialized_ && timing.network_delay_ms > 0) {
     // Calculate offset using RTP timestamp and actual departure time
     // Note: We don't include encode_ms in offset calculation as requested
     rtp_time_offset_ = timing.first_packet_arrival_timestamp - (timing.network_delay_ms - 5) - (rtp_ms + timing.encode_ms); 
@@ -770,6 +799,18 @@ void GtkMainWnd::VideoRenderer::LogFrameMetrics(const webrtc::VideoFrame& frame)
     int estimated_departure = rtp_ms + rtp_time_offset_ + timing.encode_ms; // rtp_ms + offset --> capture time
     int estimated_network_ms = timing.last_packet_arrival_timestamp - estimated_departure;
 
+    // Before the frame_log_file_ << line, add:
+    double avail_bw = 0.0;
+    if (timing.frame_construction_delay_ms + 0.5 > 0) {
+        // Convert bytes to bits (* 8)
+        // Convert ms to seconds (/ 1000)
+        // Convert to Mbps (/ 1000000)
+        // Final formula: (bytes * 8) / (ms / 1000) / 1000000
+        // Simplified: (bytes * 8 * 1000) / (ms * 1000000)
+        avail_bw = (static_cast<double>(timing.encoded_size) * 8.0 * 1000.0) / 
+                  ((static_cast<double>(timing.frame_construction_delay_ms) +0.5) * 1000000.0);
+    }
+
     frame_log_file_ << current_time << ","
                     << frame.rtp_timestamp() << ","
                     << timing.first_packet_departure_timestamp << ","
@@ -778,15 +819,19 @@ void GtkMainWnd::VideoRenderer::LogFrameMetrics(const webrtc::VideoFrame& frame)
                     << timing.last_packet_arrival_timestamp << ","
                     << timing.render_ms << ","
                     << timing.encode_ms << ","
+                    << timing.pacing_ms << ","
                     << timing.network_ms << ","
                     << estimated_network_ms << ","
                     << timing.decode_ms << ","
                     << timing.frame_construction_delay_ms << ","
                     << timing.inter_frame_delay_ms << ","
+                    << inter_frame_departure_ms << ","  // New column
+                    << frame_jitter_ms << ","          // New column
                     << timing.encoded_size << ","  
                     << frame.width() << ","  
                     << frame.height() << "," 
-                    << timing.network_delay_ms<< "\n";  
+                    << timing.network_delay_ms<< ","
+                    << avail_bw << "\n";  
   }
   
   // Flush to ensure data is written immediately

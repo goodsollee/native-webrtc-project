@@ -31,6 +31,11 @@ WebSocketClient::WebSocketClient()
   info.options = LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
   info.user = this;  // Store this pointer in context
 
+  info.ka_time = 30;         // Seconds before sending a "ping"
+  info.ka_probes = 3;       // How many pings before giving up
+  info.ka_interval = 10;    // Interval between pings
+  info.timeout_secs = 0;    // 0 means no timeout from LWS side
+
   RTC_LOG(LS_INFO) << "Creating libwebsocket context...";
   context_ = lws_create_context(&info);
   if (!context_) {
@@ -44,6 +49,30 @@ WebSocketClient::~WebSocketClient() {
     lws_context_destroy(context_);
   }
 }
+
+bool WebSocketClient::SendPing() {
+  // Don’t send if not connected.
+  if (!is_connected_ || !websocket_) {
+    return false;
+  }
+
+  // A short ping payload to verify a response
+  const char* ping_payload = "keepalive";
+  // Allocate buffer with LWS_PRE
+  unsigned char buf[LWS_PRE + 32];
+  memset(buf, 0, sizeof(buf));
+  size_t len = strlen(ping_payload);
+  memcpy(&buf[LWS_PRE], ping_payload, len);
+
+  int ret = lws_write(websocket_, &buf[LWS_PRE], len, LWS_WRITE_PING);
+  if (ret < 0) {
+    RTC_LOG(LS_ERROR) << "Failed to send LWS ping";
+    return false;
+  }
+  RTC_LOG(LS_INFO) << "Sent WebSocket ping: " << ping_payload;
+  return true;
+}
+
 
 const char* GetCallbackReasonName(enum lws_callback_reasons reason) {
     switch (reason) {
@@ -345,6 +374,14 @@ void WebSocketClient::HandleCallback(struct lws *wsi,
 void WebSocketClient::Service() {
     if (context_) {
         lws_service(context_, 0);
+
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - last_ping_time_);
+        if (elapsed >= ping_interval_) {
+          if (SendPing()) {
+             last_ping_time_ = now;
+          }
+        }
         
         // Trigger next service immediately if connected
         if (is_connected_ && websocket_) {

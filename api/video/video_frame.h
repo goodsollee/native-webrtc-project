@@ -41,6 +41,7 @@ class RTC_EXPORT VideoFrame {
 
     // Capture to render pipeline timings
     int64_t encode_ms = 0;
+    int64_t pacing_ms = 0;
     int64_t network_ms = 0; 
     int64_t decode_ms = 0;
     int64_t render_ms = 0;       // When frame should be rendered

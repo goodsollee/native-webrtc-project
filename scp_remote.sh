@@ -1,1 +1,3 @@
-scp ./out/Release/peerconnection_client ec2-user@bullet_seoul:~/
+scp ./out/Release/peerconnection_client ubuntu@endure_cali:~/junhong
+scp ./out/Release/peerconnection_client ubuntu@endure_cali2:~/junhong
+scp ./out/Release/peerconnection_client ubuntu@endure_cali3:~/junhong

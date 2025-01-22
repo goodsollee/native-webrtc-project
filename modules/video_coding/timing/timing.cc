@@ -51,7 +51,7 @@ VCMTiming::VCMTiming(Clock* clock, const FieldTrialsView& field_trials)
       decode_time_filter_(std::make_unique<DecodeTimePercentileFilter>()),
       render_delay_(kDefaultRenderDelay),
       min_playout_delay_(TimeDelta::Zero()),
-      max_playout_delay_(TimeDelta::Seconds(10)),
+      max_playout_delay_(TimeDelta::Millis(200)),
       jitter_delay_(TimeDelta::Zero()),
       current_delay_(TimeDelta::Zero()),
       prev_frame_timestamp_(0),

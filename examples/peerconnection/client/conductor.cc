@@ -1063,7 +1063,7 @@ void Conductor::AddTracks() {
 
     if (frame_generator) {
       auto resolution = frame_generator->GetResolution();
-      const int kTargetFps = frame_generator->fps().value_or(60);
+      const int kTargetFps = 30;//frame_generator->fps().value_or(30);
       
       auto video_capturer = std::make_unique<webrtc::test::FrameGeneratorCapturer>(
           webrtc::Clock::GetRealTimeClock(),

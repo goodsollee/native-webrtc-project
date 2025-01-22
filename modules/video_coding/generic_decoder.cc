@@ -255,6 +255,8 @@ void VCMDecodedFrameCallback::Decoded(VideoFrame& decodedImage,
   frame_timing.first_packet_arrival_timestamp = timing_frame_info.receive_start_ms;
   frame_timing.last_packet_arrival_timestamp = timing_frame_info.receive_finish_ms;
 
+  frame_timing.pacing_ms = frame_info->timing.pacer_exit_ms - frame_info->timing.packetization_finish_ms;
+
   // Set additional timing info
   frame_timing.frame_construction_delay_ms = frame_info->timing.frame_construction_delay_ms;
   frame_timing.inter_frame_delay_ms = frame_info->timing.inter_frame_delay_ms;

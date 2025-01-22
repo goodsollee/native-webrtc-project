@@ -555,6 +555,14 @@ std::vector<ProbeClusterConfig> ProbeController::InitiateProbing(
     Timestamp now,
     std::vector<DataRate> bitrates_to_probe,
     bool probe_further) {
+  
+  /*
+  bool disable_probing = true;
+  if (disable_probing) {
+    return {};
+  }
+  */
+
   if (config_.skip_if_estimate_larger_than_fraction_of_max > 0) {
     DataRate network_estimate = network_estimate_
                                     ? network_estimate_->link_capacity_upper

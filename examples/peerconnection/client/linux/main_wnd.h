@@ -103,8 +103,8 @@ class GtkMainWnd : public MainWindow {
   std::string GetLogFolder() const; 
 
  protected:
-  class VideoRenderer : public rtc::VideoSinkInterface<webrtc::VideoFrame>{
-   public:
+  class VideoRenderer : public rtc::VideoSinkInterface<webrtc::VideoFrame> {
+ public:
     VideoRenderer(GtkMainWnd* main_wnd,
                   webrtc::VideoTrackInterface* track_to_render);
     virtual ~VideoRenderer();
@@ -113,48 +113,46 @@ class GtkMainWnd : public MainWindow {
     void OnFrame(const webrtc::VideoFrame& frame) override;
 
     rtc::ArrayView<const uint8_t> image() const { return image_; }
-
     int width() const { return width_; }
-
     int height() const { return height_; }
-
-    // juheon added
     void SetHeadless(bool headless) { headless_ = headless; }
-
     float fps() const { return current_fps_; }
-
-    float bitrate() const { return current_bitrate_; } 
-
-    std::string log_folder_;
-    std::ofstream frame_log_file_;
-    bool logging_initialized_ = false;
+    float bitrate() const { return current_bitrate_; }
 
     void InitializeLogging(const std::string& log_folder);
     void LogFrameMetrics(const webrtc::VideoFrame& frame);
 
-    // juheon added
-    bool headless_ = false;
-    int frame_id_ = 0;
-
-   protected:
+  protected:
     void SetSize(int width, int height);
+
+    // Basic rendering members
     rtc::Buffer image_;
     int width_;
     int height_;
     GtkMainWnd* main_wnd_;
     rtc::scoped_refptr<webrtc::VideoTrackInterface> rendered_track_;
+    bool headless_ = false;
+    int frame_id_ = 0;
 
-    int64_t last_frame_time_;
+    // Frame timing and statistics
+    int64_t last_frame_time_ = 0;
+    int frame_count_ = 0;
     float current_fps_ = 0.0f;
-    int frame_count_;
-
-    // For bitrate calculation
     size_t total_bytes_ = 0;
-    float current_bitrate_ = 0.0f;  // in kbps
-    int64_t bitrate_time_ = 0;
+    float current_bitrate_ = 0.0f;
+    int64_t start_time_ = 0;
 
-    uint64_t rtp_time_offset_ = 0;  // Store RTP timestamp to wall clock offset
+    // New members for jitter calculation
+    int64_t last_departure_ts_ = 0;
+    int64_t last_arrival_ts_ = 0;
+    bool first_frame_ = true;
+
+    // Logging related members
+    std::string log_folder_;
+    std::ofstream frame_log_file_;
+    bool logging_initialized_ = false;
     bool offset_initialized_ = false;
+    int64_t rtp_time_offset_ = 0;
     int64_t last_rtp_ms_ = 0;
   };
 

@@ -28,7 +28,7 @@ fi
 
 # Set headless based on is_sender
 if [ "$is_sender" = "true" ]; then
-    headless="true"
+    headless="false"
 else
     headless="false"
 fi

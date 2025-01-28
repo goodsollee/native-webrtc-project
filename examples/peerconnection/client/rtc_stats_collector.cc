@@ -242,7 +242,7 @@ void RTCStatsCollectorCallback::ProcessInboundRTPStats(const webrtc::RTCStats& s
         }
 
         // Write stats to file with mutex protection
-        if (average_stats_file_.is_open()) {
+        if (average_stats_file_.is_open() && avg_frames_decoded > 0) {
             average_stats_file_ << current_time_ms << ","
                     << avg_frames_decoded << ","
                     << avg_frames_dropped << ","

@@ -1038,7 +1038,8 @@ void Conductor::AddTracks() {
       // Enable timing-related extensions
       if (ext.uri == webrtc::RtpExtension::kAbsoluteCaptureTimeUri ||
           ext.uri == webrtc::RtpExtension::kVideoTimingUri ||
-          ext.uri == webrtc::RtpExtension::kTimestampOffsetUri) {
+          ext.uri == webrtc::RtpExtension::kTimestampOffsetUri ||
+          ext.uri == webrtc::RtpExtension::kPlayoutDelayUri) {
         ext.direction = webrtc::RtpTransceiverDirection::kSendRecv;
       }
     }
@@ -1136,10 +1137,12 @@ void Conductor::AddTracks() {
         parameters.encodings.clear();
         webrtc::RtpEncodingParameters encoding;
         encoding.active = true;
-        encoding.max_bitrate_bps = std::optional<int>(50000000);  // 40 Mbps for 4K
+        encoding.max_bitrate_bps = std::optional<int>(25000000);  // 40 Mbps for 4K
         encoding.max_framerate = std::optional<int>(60);          // Up to 60fps
         encoding.scale_resolution_down_by = std::optional<double>(1.0);  // No downscaling
         parameters.encodings.push_back(encoding);
+
+        // Set header extension
 
         // Set the parameters
         webrtc::RTCError error = sender->SetParameters(parameters);

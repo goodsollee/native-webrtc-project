@@ -549,8 +549,8 @@ bool RTPSenderVideo::SendVideo(int payload_type,
       AllowRetransmission(temporal_id, retransmission_settings,
                           expected_retransmission_time);
 
-  // Set cloud gaming scenario (100 ms of deadline)
-  video_header.playout_delay = VideoPlayoutDelay(TimeDelta::Millis(100), TimeDelta::Millis(100));
+  // Set cloud gaming scenario for QCON (100 ms of deadline ?)
+  video_header.playout_delay = VideoPlayoutDelay(TimeDelta::Millis(0), TimeDelta::Millis(0));
 
   MaybeUpdateCurrentPlayoutDelay(video_header);
   if (video_header.frame_type == VideoFrameType::kVideoFrameKey) {

@@ -102,7 +102,7 @@ std::unique_ptr<TestVideoCapturer> CreateCapturer(
     webrtc::TaskQueueFactory& task_queue_factory) {
   const size_t kWidth = 640;
   const size_t kHeight = 480;
-  const size_t kFps = 30;
+  const size_t kFps = 60;
   std::unique_ptr<webrtc::VideoCaptureModule::DeviceInfo> info(
       webrtc::VideoCaptureFactory::CreateDeviceInfo());
   if (!info) {
@@ -1064,7 +1064,7 @@ void Conductor::AddTracks() {
 
     if (frame_generator) {
       auto resolution = frame_generator->GetResolution();
-      const int kTargetFps = 30;//frame_generator->fps().value_or(30);
+      const int kTargetFps = frame_generator->fps().value_or(30);
       
       auto video_capturer = std::make_unique<webrtc::test::FrameGeneratorCapturer>(
           webrtc::Clock::GetRealTimeClock(),
@@ -1119,8 +1119,8 @@ void Conductor::AddTracks() {
         // Configure H264 parameters
         for (webrtc::RtpCodecParameters& codec : parameters.codecs) {
           if (codec.name == "H264") {
-            // High profile, Level 5.1
-            codec.parameters["profile-level-id"] = "640033";
+
+            codec.parameters["profile-level-id"] = "42e01f";
             codec.parameters["packetization-mode"] = "1";
             codec.parameters["level-asymmetry-allowed"] = "1";
             // For 4K support
@@ -1137,12 +1137,10 @@ void Conductor::AddTracks() {
         parameters.encodings.clear();
         webrtc::RtpEncodingParameters encoding;
         encoding.active = true;
-        encoding.max_bitrate_bps = std::optional<int>(25000000);  // 40 Mbps for 4K
+        encoding.max_bitrate_bps = std::optional<int>(25000000);  // 25 Mbps for 1080p/60fps
         encoding.max_framerate = std::optional<int>(60);          // Up to 60fps
         encoding.scale_resolution_down_by = std::optional<double>(1.0);  // No downscaling
         parameters.encodings.push_back(encoding);
-
-        // Set header extension
 
         // Set the parameters
         webrtc::RTCError error = sender->SetParameters(parameters);

@@ -28,13 +28,13 @@ fi
 
 # Set headless based on is_sender
 if [ "$is_sender" = "true" ]; then
-    headless="false"
+    headless="true"
 else
     headless="false"
 fi
 
 # Build the command
-cmd="./out/Release/peerconnection_client --server=goodsol.overlinkapp.org --is_sender=$is_sender --room_id=$room_id"
+cmd="./out/Release/peerconnection_client --server=goodsol.overlinkapp.org --is_sender=$is_sender --room_id=$room_id --headless=$headless"
 
 # Add y4m_path to command only if it's provided
 if [ ! -z "$y4m_path" ]; then

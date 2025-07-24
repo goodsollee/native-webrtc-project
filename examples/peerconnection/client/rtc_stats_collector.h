@@ -32,10 +32,15 @@ struct PersistentStats {
     // For overall average bitrate
     int64_t total_bytes_received_ = 0;
     int64_t first_stats_time_ms_ = -1;  // Time of first stats collection
+    double  acc_min_playout_delay_   = 0.0;   // **NEW – ms**
     
     // For current period average bitrate
     int64_t period_start_bytes_ = 0;
     int64_t period_start_time_ms_ = 0;
+
+    int64_t last_remote_bytes_sent_      = 0;   // 최신 remote-outbound bytesSent
+    int64_t first_remote_stats_time_ms_  = -1;  // 최초 도착 시각
+    int64_t period_remote_start_bytes_   = 0;   // 직전 구간 시작 값
 };
 
 class RTCStatsCollectorCallback : public webrtc::RTCStatsCollectorCallback {
@@ -53,6 +58,8 @@ protected:
         const rtc::scoped_refptr<const webrtc::RTCStatsReport>& report) override;
 
 private:
+    void ProcessRemoteOutboundRTPStats(const webrtc::RTCStats& stats);
+    
     void OnStatsDeliveredOnSignalingThread(
         rtc::scoped_refptr<const webrtc::RTCStatsReport> report);
     

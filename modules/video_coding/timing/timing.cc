@@ -11,6 +11,7 @@
 #include "modules/video_coding/timing/timing.h"
 
 #include <algorithm>
+#include <iostream>
 
 #include "api/units/time_delta.h"
 #include "modules/video_coding/timing/decode_time_percentile_filter.h"
@@ -102,6 +103,11 @@ void VCMTiming::set_max_playout_delay(TimeDelta max_playout_delay) {
 
 void VCMTiming::SetJitterDelay(TimeDelta jitter_delay) {
   MutexLock lock(&mutex_);
+  /*
+  std::cout << "Current delay: " << current_delay_.ms() << " Jitter delay: " << jitter_delay_.ms() 
+          << " Min playout delay: " << min_playout_delay_.ms()
+          << " Max playout delay: " << max_playout_delay_.ms() << std::endl;*/
+  
   if (jitter_delay != jitter_delay_) {
     jitter_delay_ = jitter_delay;
     // When in initial state, set current delay to minimum delay.
@@ -114,6 +120,8 @@ void VCMTiming::SetJitterDelay(TimeDelta jitter_delay) {
 void VCMTiming::UpdateCurrentDelay(uint32_t frame_timestamp) {
   MutexLock lock(&mutex_);
   TimeDelta target_delay = TargetDelayInternal();
+
+  std::cout << "Current delay: " << current_delay_.ms() << " Target delay: " << target_delay.ms() << std::endl;
 
   if (current_delay_.IsZero()) {
     // Not initialized, set current delay to target.
@@ -196,6 +204,7 @@ void VCMTiming::SetLastDecodeScheduledTimestamp(
 Timestamp VCMTiming::RenderTimeInternal(uint32_t frame_timestamp,
                                         Timestamp now) const {
   if (UseLowLatencyRendering()) {
+
     // Render as soon as possible or with low-latency renderer algorithm.
     return Timestamp::Zero();
   }

@@ -180,6 +180,7 @@ void RTCStatsCollectorCallback::ProcessInboundRTPStats(const webrtc::RTCStats& s
     int64_t frames_dropped = static_cast<int64_t>(get_numeric("framesDropped"));
     int64_t frames_received = static_cast<int64_t>(get_numeric("framesReceived"));
     double framerate = get_numeric("framesPerSecond");
+    double min_playout_delay_ms = get_numeric("googMinPlayoutDelayMs");
     double jitter_buffer_delay = get_numeric("jitterBufferDelay") * 1000.0;
     int64_t width = static_cast<int64_t>(get_numeric("frameWidth"));
     int64_t height = static_cast<int64_t>(get_numeric("frameHeight"));
@@ -202,13 +203,39 @@ void RTCStatsCollectorCallback::ProcessInboundRTPStats(const webrtc::RTCStats& s
     persistent_stats_.acc_frames_received_ += frames_received;
     persistent_stats_.acc_framerate_ += framerate;
     persistent_stats_.acc_jitter_buffer_delay_ += jitter_buffer_delay;
+    persistent_stats_.acc_min_playout_delay_  += min_playout_delay_ms;
     persistent_stats_.acc_total_decode_time_ += total_decode_time;
     persistent_stats_.acc_count_++;
 
     bool should_write = (current_time_ms - persistent_stats_.last_average_time_ms_) >= 1000;  // 1 second interval
 
     if (should_write && persistent_stats_.acc_count_ > 0) {
+
+        double period_time_sec =
+            (current_time_ms - persistent_stats_.period_start_time_ms_) / 1000.0;
+        // Sender bitrates
+        double period_sender_bitrate  = 0.0;
+        double overall_sender_bitrate = 0.0;
+
+        if (persistent_stats_.first_remote_stats_time_ms_ != -1) {
+            double overall_remote_time_sec =
+                (current_time_ms - persistent_stats_.first_remote_stats_time_ms_) / 1000.0;
+            if (overall_remote_time_sec > 0) {
+                overall_sender_bitrate =
+                    (persistent_stats_.last_remote_bytes_sent_ * 8.0) / overall_remote_time_sec; // bit/s
+            }
+
+            double period_remote_bytes_delta =
+                persistent_stats_.last_remote_bytes_sent_ -
+                persistent_stats_.period_remote_start_bytes_;
+            if (period_time_sec > 0) {
+                period_sender_bitrate =
+                    (period_remote_bytes_delta * 8.0) / period_time_sec; // bit/s
+            }
+        }
+
         // Calculate overall average bitrate (since start)
+        double avg_min_playout_delay = persistent_stats_.acc_min_playout_delay_ / persistent_stats_.acc_count_;
         double overall_time_sec = (current_time_ms - persistent_stats_.first_stats_time_ms_) / 1000.0;
         double overall_bytes_delta = bytes_received;
         double overall_average_bitrate = 0.0;
@@ -218,7 +245,6 @@ void RTCStatsCollectorCallback::ProcessInboundRTPStats(const webrtc::RTCStats& s
         persistent_stats_.total_bytes_received_ = bytes_received;
 
         // Calculate current period average bitrate
-        double period_time_sec = (current_time_ms - persistent_stats_.period_start_time_ms_) / 1000.0;
         double period_bytes_delta = bytes_received - persistent_stats_.period_start_bytes_;
         double period_average_bitrate = 0.0;
         if (period_time_sec > 0) {
@@ -244,22 +270,26 @@ void RTCStatsCollectorCallback::ProcessInboundRTPStats(const webrtc::RTCStats& s
         // Write stats to file with mutex protection
         if (average_stats_file_.is_open() && avg_frames_decoded > 0) {
             average_stats_file_ << current_time_ms << ","
-                    << avg_frames_decoded << ","
-                    << avg_frames_dropped << ","
-                    << avg_frames_received << ","
-                    << avg_framerate << ","
-                    << avg_jitter_buffer_delay << ","
-                    << width << ","
-                    << height << ","
-                    << avg_total_decode_time << ","
-                    << bytes_received << ","
-                    << period_average_bitrate << ","  // Current period bitrate
-                    << overall_average_bitrate << ","  // Overall average bitrate
-                    << decoder_implementation << "\n";
+                << avg_frames_decoded << ","
+                << avg_frames_dropped << ","
+                << avg_frames_received << ","
+                << avg_framerate << ","
+                << avg_jitter_buffer_delay << ","
+                << avg_min_playout_delay << ","
+                << width << ","
+                << height << ","
+                << avg_total_decode_time << ","
+                << bytes_received << ","
+                << period_average_bitrate << ","
+                << overall_average_bitrate << ","
+                << period_sender_bitrate << ","          
+                << overall_sender_bitrate << ","         
+                << decoder_implementation << "\n";
             average_stats_file_.flush();
         }
 
         // Reset accumulators
+        persistent_stats_.acc_min_playout_delay_ = 0.0; // **Reset**
         persistent_stats_.acc_frames_decoded_ = 0;
         persistent_stats_.acc_frames_dropped_ = 0;
         persistent_stats_.acc_frames_received_ = 0;
@@ -268,12 +298,44 @@ void RTCStatsCollectorCallback::ProcessInboundRTPStats(const webrtc::RTCStats& s
         persistent_stats_.acc_total_decode_time_ = 0.0;
         persistent_stats_.acc_count_ = 0;
         persistent_stats_.last_average_time_ms_ = current_time_ms;
+        persistent_stats_.period_remote_start_bytes_ = persistent_stats_.last_remote_bytes_sent_;
 
         // Reset period accumulators
         persistent_stats_.period_start_time_ms_ = current_time_ms;
         persistent_stats_.period_start_bytes_ = bytes_received;
     }
 }
+
+void RTCStatsCollectorCallback::ProcessRemoteOutboundRTPStats(
+    const webrtc::RTCStats& stats) {
+
+  std::vector<webrtc::Attribute> attributes = stats.Attributes();
+  auto find_attribute = [&attributes](const std::string& name) -> const webrtc::Attribute* {
+      for (const auto& a : attributes)
+          if (a.name() == name) return &a;
+      return nullptr;
+  };
+  auto get_numeric = [&find_attribute](const std::string& name,
+                                       double def = 0) -> double {
+      const auto* attr = find_attribute(name);
+      if (!attr || attr->ToString() == "null") return def;
+      char* end; const std::string& s = attr->ToString();
+      double v = std::strtod(s.c_str(), &end);
+      return (end == s.c_str()) ? def : v;
+  };
+
+  std::lock_guard<std::mutex> lock(stats_mutex_);
+
+  int64_t bytes_sent = static_cast<int64_t>(get_numeric("bytesSent"));
+  int64_t now_ms     = rtc::TimeMillis();
+
+  if (persistent_stats_.first_remote_stats_time_ms_ == -1) {
+      persistent_stats_.first_remote_stats_time_ms_ = now_ms;
+      persistent_stats_.period_remote_start_bytes_  = bytes_sent;
+  }
+  persistent_stats_.last_remote_bytes_sent_ = bytes_sent;
+}
+
 
 void RTCStatsCollectorCallback::OnStatsDeliveredOnSignalingThread(
     rtc::scoped_refptr<const webrtc::RTCStatsReport> report) {
@@ -309,6 +371,10 @@ void RTCStatsCollectorCallback::OnStatsDeliveredOnSignalingThread(
         if (std::string(stats.type()) == "inbound-rtp") {
             RTC_LOG(LS_INFO) << "Processing inbound-rtp stats: " << stats.id();
             ProcessInboundRTPStats(stats);
+        }
+        if (std::string(stats.type()) == "remote-outbound-rtp") {
+            RTC_LOG(LS_INFO) << "Processing remote-outbound-rtp stats: " << stats.id();
+            ProcessRemoteOutboundRTPStats(stats);
         }
     }
 }
@@ -397,8 +463,9 @@ bool RTCStatsCollector::OpenStatsFile(const std::string& foldername) {
     }
     RTC_LOG(LS_INFO) << "Average stats file opened successfully: " << average_filename;
     average_stats_file_ << "timestamp_ms,frames_decoded,frames_dropped,frames_received,"
-                          << "framerate,jitter_buffer_delay_ms,video_width,video_height,"
-                          << "total_decode_time_ms,total_bytes_received,bitrates,overall_avg_bitrates,decoder_implementation\n";
+                       "framerate,jitter_buffer_delay_ms,min_playout_delay_ms,video_width,video_height,"
+                       "total_decode_time_ms,total_bytes_received,bitrates,overall_avg_bitrates,"
+                       "sender_period_bitrate,sender_overall_bitrate,decoder_implementation\n";
     average_stats_file_.flush();
 
     return true;

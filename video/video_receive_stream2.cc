@@ -12,6 +12,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <iostream>
 
 #include <algorithm>
 #include <memory>
@@ -68,7 +69,7 @@ namespace {
 
 // The default delay before re-requesting a key frame to be sent.
 constexpr TimeDelta kMinBaseMinimumDelay = TimeDelta::Zero();
-constexpr TimeDelta kMaxBaseMinimumDelay = TimeDelta::Seconds(10);
+constexpr TimeDelta kMaxBaseMinimumDelay = TimeDelta::Zero();
 
 // Concrete instance of RecordableEncodedFrame wrapping needed content
 // from EncodedFrame.
@@ -709,6 +710,7 @@ void VideoReceiveStream2::OnCompleteFrame(std::unique_ptr<EncodedFrame> frame) {
           frame->EncodedImage().PlayoutDelay()) {
     frame_minimum_playout_delay_ = playout_delay->min();
     frame_maximum_playout_delay_ = playout_delay->max();
+    //std::cout << "playout delay update min: "<< frame_minimum_playout_delay_->ms() << " max: " << frame_maximum_playout_delay_->ms() << std::endl;  
     UpdatePlayoutDelays();
   }
 
@@ -1044,6 +1046,7 @@ void VideoReceiveStream2::UpdatePlayoutDelays() const {
           << " sync min delay="
           << OptionalDelayToLogString(syncable_minimum_playout_delay_);
     }
+    minimum_delay = TimeDelta::Zero();
     timing_->set_min_playout_delay(*minimum_delay);
     if (frame_minimum_playout_delay_ == TimeDelta::Zero() &&
         frame_maximum_playout_delay_ > TimeDelta::Zero()) {
@@ -1059,7 +1062,18 @@ void VideoReceiveStream2::UpdatePlayoutDelays() const {
     }
   }
 
+  /*
+  auto ms_or = [](const std::optional<TimeDelta>& d) {
+    return d ? d->ms() : -1;   // or any sentinel you like
+  };
+
+  std::cout << "Min playout delay updated, frame: " << ms_or(frame_minimum_playout_delay_)
+          << " base: " << ms_or(base_minimum_playout_delay_)
+          << " syncable: " << ms_or(syncable_minimum_playout_delay_) << " result: " << ms_or(minimum_delay) 
+          << std::endl; */
+
   if (frame_maximum_playout_delay_) {
+    //std::cout << "Maximum frame playout delay is updated with: " << frame_maximum_playout_delay_ -> ms() << std::endl;
     timing_->set_max_playout_delay(*frame_maximum_playout_delay_);
   }
 }

@@ -26,6 +26,7 @@
 #include "rtc_base/checks.h"
 #include "rtc_base/system/rtc_export.h"
 #include "api/video/video_timing.h"
+#include "api/video/video_frame_type.h"
 
 namespace webrtc {
 
@@ -52,6 +53,10 @@ class RTC_EXPORT VideoFrame {
     int64_t network_delay_ms = 0;
 
     size_t encoded_size = 0;
+
+    bool is_keyframe = false;
+    VideoFrameType frame_type =
+        VideoFrameType::kEmptyFrame;
   };
 
   // Add getter/setter for the timing info

@@ -5,6 +5,51 @@ from pathlib import Path
 import argparse
 import matplotlib.pyplot as plt
 
+def print_keyframe_intervals(frame_df):
+    """
+    Print all intervals between consecutive key-frames based on
+    estimated_first_packet_departure column (ms).
+    """
+    col = "estimated_first_packet_departure"
+    if col not in frame_df.columns:
+        print(f"[Keyframe] Column '{col}' not found.")
+        return
+
+    # 1) 키프레임 필터링
+    if 'is_keyframe' in frame_df.columns:
+        kf_df = frame_df[frame_df['is_keyframe'] == 1].copy()
+    elif 'frame_type' in frame_df.columns:
+        kf_df = frame_df[frame_df['frame_type'].astype(str)
+                         .str.contains(r'\bkey\b', case=False)].copy()
+    else:
+        print("[Keyframe] Neither 'is_keyframe' nor 'frame_type' found in CSV.")
+        return
+
+    if len(kf_df) < 2:
+        print("[Keyframe] Not enough key-frames to compute intervals.")
+        return
+
+    # 2) 시간 정렬 및 간격(ms) 계산
+    kf_df = kf_df.sort_values(col)
+    times = kf_df[col].astype(np.int64).to_numpy()
+    intervals = np.diff(times)
+
+    # 3) 출력
+    print(f"\n=== Key-frame {col} values (ms) ===")
+    for t in times:
+        print(t)
+
+    print(f"\n=== Key-frame intervals based on {col} (ms) ===")
+    for i, d in enumerate(intervals, 1):
+        print(f"{i}: {d} ms")
+
+    # 4) 통계
+    print("\nKey-frame interval stats (ms):")
+    print(f"count   : {len(intervals)}")
+    print(f"mean    : {np.mean(intervals):.2f}")
+    print(f"median  : {np.median(intervals):.2f}")
+    print(f"p05/p95 : {np.percentile(intervals, 5):.2f} / {np.percentile(intervals, 95):.2f}")
+
 
 def analyze_webrtc_metrics(folder_name):
     """
@@ -26,33 +71,38 @@ def analyze_webrtc_metrics(folder_name):
     stats_df = pd.read_csv(avg_stats_path)
 
     # Overall average bitrate stats
+    bitrate_series = stats_df['overall_avg_bitrates'].dropna()
     bitrate_stats = {
-        'mean'  : stats_df['overall_avg_bitrates'].mean(),
-        'median': stats_df['overall_avg_bitrates'].median(),
-        '95th'  : np.percentile(stats_df['overall_avg_bitrates'], 95),
-        '99th'  : np.percentile(stats_df['overall_avg_bitrates'], 99),
-        '99.9th': np.percentile(stats_df['overall_avg_bitrates'], 99.9)
+        'mean'  : bitrate_series.mean(),
+        'median': bitrate_series.median(),
+        'std'   : bitrate_series.std(),
+        '95th'  : np.percentile(bitrate_series, 95),
+        '99th'  : np.percentile(bitrate_series, 99),
+        '99.9th': np.percentile(bitrate_series, 99.9)
     }
 
     # Estimated network ms stats
+    network_series = frame_df['estimated_network_ms'].dropna()
     network_stats = {
-        'mean'  : frame_df['estimated_network_ms'].mean(),
-        'median': frame_df['estimated_network_ms'].median(),
-        '95th'  : np.percentile(frame_df['estimated_network_ms'], 95),
-        '99th'  : np.percentile(frame_df['estimated_network_ms'], 99),
-        '99.9th': np.percentile(frame_df['estimated_network_ms'], 99.9)
+        'mean'  : network_series.mean(),
+        'median': network_series.median(),
+        'std'   : network_series.std(),
+        '95th'  : np.percentile(network_series, 95),
+        '99th'  : np.percentile(network_series, 99),
+        '99.9th': np.percentile(network_series, 99.9)
     }
 
-    # === NEW: framerate stats (p0.1, p01, p05) ===
+    # Framerate stats
     framerate = stats_df['framerate'].dropna()
-
     framerate_stats = {
         'mean'  : framerate.mean(),
         'median': framerate.median(),
+        'std'   : framerate.std(),
         'p0.1'  : np.percentile(framerate, 0.1),
         'p01'   : np.percentile(framerate, 1),
         'p05'   : np.percentile(framerate, 5)
     }
+
 
     # Frame-level jitter stats
     frame_df['rtp_ms'] = frame_df['rtp_timestamp'] / 90
@@ -107,6 +157,33 @@ def analyze_webrtc_metrics(folder_name):
     plt.grid(True)
     plt.tight_layout()
     plt.show()
+
+    plt.figure(figsize=(8, 5))
+    plt.plot(df_plot['relative_time_s'], df_plot['encoded_size'], marker='o')
+    plt.xlabel("Time (s)")
+    plt.ylabel("Encoded Size (bytes)")
+    plt.title("Encoded Size vs Time")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+    if 'timestamp' in stats_df.columns:
+        stats_df['relative_time_s'] = (
+            stats_df['timestamp'] - stats_df['timestamp'].min()) / 1000.0
+        x_fps = stats_df['relative_time_s']
+    else:
+        x_fps = stats_df.index  # each row is one stats window
+
+    plt.figure(figsize=(8, 5))
+    plt.plot(x_fps, stats_df['framerate'], marker='o')
+    plt.xlabel("Time (s)" if 'timestamp' in stats_df.columns else "Stats window")
+    plt.ylabel("Framerate (fps)")
+    plt.title("Framerate vs Time")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+    print_keyframe_intervals(frame_df)
 
 
 def main():

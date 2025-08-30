@@ -263,6 +263,9 @@ void VCMDecodedFrameCallback::Decoded(VideoFrame& decodedImage,
   frame_timing.network_delay_ms = frame_info->timing.network_delay_ms;
   frame_timing.encoded_size = frame_info->timing.encoded_size;
 
+  frame_timing.is_keyframe = (frame_info->frame_type == VideoFrameType::kVideoFrameKey);
+  frame_timing.frame_type  = frame_info->frame_type;
+
   // Set frame timing on decoded image
   decodedImage.set_frame_timing(frame_timing);
 

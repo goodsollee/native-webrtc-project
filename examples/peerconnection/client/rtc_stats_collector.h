@@ -33,6 +33,29 @@ struct PersistentStats {
     int64_t total_bytes_received_ = 0;
     int64_t first_stats_time_ms_ = -1;  // Time of first stats collection
     double  acc_min_playout_delay_   = 0.0;   // **NEW – ms**
+
+    // FEC and Losses
+    int64_t last_packets_received_       = -1;
+    int64_t last_packets_lost_           = -1;
+    int64_t last_packets_discarded_      = -1;
+    int64_t last_fec_packets_received_   = -1;
+    int64_t last_fec_packets_discarded_  = -1;
+    int64_t last_packets_repaired_       = -1;
+
+    // ── FEC bytes ──
+    int64_t last_fec_bytes_recv_          = -1;
+    int64_t last_remote_fec_bytes_sent_   = -1;
+    int64_t period_remote_start_fec_bytes_sent_ = 0;
+
+    // ReTX
+    int64_t last_retx_pkts_recv_        = -1;
+    int64_t last_retx_bytes_recv_       = -1;
+
+    int64_t last_remote_retx_pkts_sent_ = -1;
+    int64_t last_remote_retx_bytes_sent_= -1;
+
+    int64_t period_remote_start_retx_pkts_sent_  = 0;
+    int64_t period_remote_start_retx_bytes_sent_ = 0;
     
     // For current period average bitrate
     int64_t period_start_bytes_ = 0;

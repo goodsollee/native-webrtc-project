@@ -37,6 +37,7 @@
 #include "rtc_base/checks.h"
 #include "rtc_base/logging.h"
 #include "third_party/libyuv/include/libyuv/convert_from.h"
+#include "api/video/video_frame_type.h" 
 
 #include <iostream>
 
@@ -46,6 +47,16 @@ namespace {
 // Simple static functions that simply forward the callback to the
 // GtkMainWnd instance.
 //
+
+
+static const char* ToCString(webrtc::VideoFrameType t) {
+  switch (t) {
+    case webrtc::VideoFrameType::kEmptyFrame:   return "empty";
+    case webrtc::VideoFrameType::kVideoFrameKey:return "key";
+    case webrtc::VideoFrameType::kVideoFrameDelta:return "delta";
+    default: return "unknown";
+  }
+}
 
 gboolean OnDestroyedCallback(GtkWidget* widget,
                              GdkEvent* event,
@@ -752,7 +763,8 @@ void GtkMainWnd::VideoRenderer::InitializeLogging(const std::string& log_folder)
                     << "encode_ms,pacing_ms,network_ms,estimated_network_ms,decode_ms,"
                     << "frame_construction_delay_ms,inter_frame_delay_ms,"
                     << "inter_frame_departure_ms,frame_jitter_ms,"  // New columns
-                    << "encoded_size,height,width,min_rtt,avail_bw\n";
+                    << "encoded_size,height,width,min_rtt,avail_bw,"
+                    << "is_keyframe,frame_type\n";
     logging_initialized_ = true;
   }
 }
@@ -811,6 +823,9 @@ void GtkMainWnd::VideoRenderer::LogFrameMetrics(const webrtc::VideoFrame& frame)
                   ((static_cast<double>(timing.frame_construction_delay_ms) +0.5) * 1000000.0);
     }
 
+    const bool is_keyframe = timing.is_keyframe;                
+    const webrtc::VideoFrameType ftype = timing.frame_type;     
+
     frame_log_file_ << current_time << ","
                     << frame.rtp_timestamp() << ","
                     << timing.first_packet_departure_timestamp << ","
@@ -831,7 +846,10 @@ void GtkMainWnd::VideoRenderer::LogFrameMetrics(const webrtc::VideoFrame& frame)
                     << frame.width() << ","  
                     << frame.height() << "," 
                     << timing.network_delay_ms<< ","
-                    << avail_bw << "\n";  
+                    << avail_bw << ","
+                    << (is_keyframe ? 1 : 0) << ","             
+                    << ToCString(ftype)                         
+                    << "\n";
   }
   
   // Flush to ensure data is written immediately

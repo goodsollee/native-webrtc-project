@@ -187,6 +187,17 @@ void RTCStatsCollectorCallback::ProcessInboundRTPStats(const webrtc::RTCStats& s
     double total_decode_time = get_numeric("totalDecodeTime") * 1000.0;
     int64_t bytes_received = static_cast<int64_t>(get_numeric("bytesReceived"));
 
+    int64_t packets_received        = static_cast<int64_t>(get_numeric("packetsReceived"));
+    int64_t packets_lost            = static_cast<int64_t>(get_numeric("packetsLost"));
+    int64_t packets_discarded       = static_cast<int64_t>(get_numeric("packetsDiscarded"));
+    int64_t fec_packets_received    = static_cast<int64_t>(get_numeric("fecPacketsReceived"));
+    int64_t fec_packets_discarded   = static_cast<int64_t>(get_numeric("fecPacketsDiscarded"));
+    int64_t packets_repaired        = static_cast<int64_t>(get_numeric("packetsRepaired"));
+    int64_t fec_bytes_recv = static_cast<int64_t>(get_numeric("fecBytesReceived"));
+
+    int64_t retx_pkts_recv  = static_cast<int64_t>(get_numeric("retransmittedPacketsReceived"));
+    int64_t retx_bytes_recv = static_cast<int64_t>(get_numeric("retransmittedBytesReceived"));
+
     int64_t current_time_ms = rtc::TimeMillis();
 
     // Initialize first stats time if not set
@@ -259,6 +270,86 @@ void RTCStatsCollectorCallback::ProcessInboundRTPStats(const webrtc::RTCStats& s
         double avg_jitter_buffer_delay = persistent_stats_.acc_jitter_buffer_delay_ / persistent_stats_.acc_count_;
         double avg_total_decode_time = persistent_stats_.acc_total_decode_time_ / persistent_stats_.acc_count_;
 
+        /* ─── compute 1-second deltas ─── */
+        int64_t period_packets_received      = 0;
+        int64_t period_packets_lost          = 0;
+        int64_t period_packets_discarded     = 0;
+        int64_t period_fec_packets_received  = 0;
+        int64_t period_fec_packets_discarded = 0;
+        int64_t period_packets_repaired      = 0;
+
+        if (persistent_stats_.last_packets_received_ != -1) {
+            period_packets_received      = packets_received      - persistent_stats_.last_packets_received_;
+            period_packets_lost          = packets_lost          - persistent_stats_.last_packets_lost_;
+            period_packets_discarded     = packets_discarded     - persistent_stats_.last_packets_discarded_;
+            period_fec_packets_received  = fec_packets_received  - persistent_stats_.last_fec_packets_received_;
+            period_fec_packets_discarded = fec_packets_discarded - persistent_stats_.last_fec_packets_discarded_;
+            period_packets_repaired      = packets_repaired      - persistent_stats_.last_packets_repaired_;
+        }
+
+        double loss_ratio = 0.0;
+        if (period_packets_received + period_packets_lost > 0) {
+            loss_ratio = static_cast<double>(period_packets_lost) /
+                        static_cast<double>(period_packets_received + period_packets_lost);
+        }
+
+        /* update last-cumulative snapshots */
+        persistent_stats_.last_packets_received_      = packets_received;
+        persistent_stats_.last_packets_lost_          = packets_lost;
+        persistent_stats_.last_packets_discarded_     = packets_discarded;
+        persistent_stats_.last_fec_packets_received_  = fec_packets_received;
+        persistent_stats_.last_fec_packets_discarded_ = fec_packets_discarded;
+        persistent_stats_.last_packets_repaired_      = packets_repaired;
+
+        // ── receiver FEC bytes Δ ──
+        int64_t period_fec_bytes_recv = 0;
+        if (persistent_stats_.last_fec_bytes_recv_ != -1)
+            period_fec_bytes_recv = fec_bytes_recv -
+                                    persistent_stats_.last_fec_bytes_recv_;
+        persistent_stats_.last_fec_bytes_recv_ = fec_bytes_recv;
+
+        // ── sender FEC bytes Δ ──
+        int64_t period_fec_bytes_sent = 0;
+        if (persistent_stats_.period_remote_start_fec_bytes_sent_ != 0)
+            period_fec_bytes_sent = persistent_stats_.last_remote_fec_bytes_sent_ -
+                                    persistent_stats_.period_remote_start_fec_bytes_sent_;
+
+        // receiver-side FEC share of total traffic this second
+        double fec_byte_ratio = 0.0;
+        if (period_bytes_delta > 0)                       // already computed bytes Δ
+            fec_byte_ratio = static_cast<double>(period_fec_bytes_recv) /
+                            static_cast<double>(period_bytes_delta);
+
+        // ───── retransmission deltas (receiver) ─────
+        int64_t period_retx_pkts_recv  = 0;
+        int64_t period_retx_bytes_recv = 0;
+
+        if (persistent_stats_.last_retx_pkts_recv_ != -1) {
+            period_retx_pkts_recv  = retx_pkts_recv  - persistent_stats_.last_retx_pkts_recv_;
+            period_retx_bytes_recv = retx_bytes_recv - persistent_stats_.last_retx_bytes_recv_;
+        }
+
+        // update snapshots for next period
+        persistent_stats_.last_retx_pkts_recv_  = retx_pkts_recv;
+        persistent_stats_.last_retx_bytes_recv_ = retx_bytes_recv;
+
+        // ───── retransmission deltas (sender) ─────
+        int64_t period_retx_pkts_sent  = 0;
+        int64_t period_retx_bytes_sent = 0;
+        if (persistent_stats_.period_remote_start_retx_pkts_sent_ != 0) {
+            period_retx_pkts_sent  = persistent_stats_.last_remote_retx_pkts_sent_
+                                - persistent_stats_.period_remote_start_retx_pkts_sent_;
+            period_retx_bytes_sent = persistent_stats_.last_remote_retx_bytes_sent_
+                                - persistent_stats_.period_remote_start_retx_bytes_sent_;
+        }
+
+        // simple receiver-side retransmission ratio
+        double retransmission_ratio = 0.0;
+        if (period_packets_received + period_packets_lost > 0) {
+            retransmission_ratio = static_cast<double>(period_retx_pkts_recv) /
+                                static_cast<double>(period_packets_received + period_packets_lost);
+        }
+
         // Handle decoder implementation
         const auto* decoder_impl_attr = find_attribute("decoderImplementation");
         std::string decoder_implementation =
@@ -284,8 +375,23 @@ void RTCStatsCollectorCallback::ProcessInboundRTPStats(const webrtc::RTCStats& s
                 << overall_average_bitrate << ","
                 << period_sender_bitrate << ","          
                 << overall_sender_bitrate << ","         
-                << decoder_implementation << "\n";
-            average_stats_file_.flush();
+                << decoder_implementation << ","
+                << period_packets_received << ","
+                << period_packets_lost << ","
+                << loss_ratio << ","
+                << period_packets_discarded << ","
+                << period_fec_packets_received << ","
+                << period_fec_packets_discarded << ","
+                << period_packets_repaired << ","
+                << period_fec_bytes_recv << ","
+                << period_fec_bytes_sent << ","
+                << fec_byte_ratio <<","
+                << period_retx_pkts_recv << ","
+                << period_retx_bytes_recv << ","
+                << period_retx_pkts_sent << ","
+                << period_retx_bytes_sent << ","
+                << retransmission_ratio << "\n";
+                average_stats_file_.flush();
         }
 
         // Reset accumulators
@@ -300,9 +406,18 @@ void RTCStatsCollectorCallback::ProcessInboundRTPStats(const webrtc::RTCStats& s
         persistent_stats_.last_average_time_ms_ = current_time_ms;
         persistent_stats_.period_remote_start_bytes_ = persistent_stats_.last_remote_bytes_sent_;
 
+        persistent_stats_.period_remote_start_retx_bytes_sent_ =
+
+        persistent_stats_.period_remote_start_fec_bytes_sent_ =
+            persistent_stats_.last_remote_fec_bytes_sent_;
+
         // Reset period accumulators
         persistent_stats_.period_start_time_ms_ = current_time_ms;
         persistent_stats_.period_start_bytes_ = bytes_received;
+
+        persistent_stats_.period_remote_start_retx_pkts_sent_  = persistent_stats_.last_remote_retx_pkts_sent_;
+        persistent_stats_.period_remote_start_retx_bytes_sent_ = persistent_stats_.last_remote_retx_bytes_sent_;
+
     }
 }
 
@@ -334,6 +449,23 @@ void RTCStatsCollectorCallback::ProcessRemoteOutboundRTPStats(
       persistent_stats_.period_remote_start_bytes_  = bytes_sent;
   }
   persistent_stats_.last_remote_bytes_sent_ = bytes_sent;
+
+  int64_t fec_bytes_sent = static_cast<int64_t>(
+                           get_numeric("fecBytesSent"));
+
+  if (persistent_stats_.first_remote_stats_time_ms_ == -1) {
+      /* …existing init… */
+      persistent_stats_.period_remote_start_fec_bytes_sent_ = fec_bytes_sent;
+  }
+  persistent_stats_.last_remote_fec_bytes_sent_ = fec_bytes_sent;
+
+  int64_t retx_bytes_sent = static_cast<int64_t>(
+                            get_numeric("retransmittedBytesSent"));
+
+    if (persistent_stats_.first_remote_stats_time_ms_ == -1) {
+        persistent_stats_.period_remote_start_retx_bytes_sent_ = retx_bytes_sent;
+    }
+    persistent_stats_.last_remote_retx_bytes_sent_ = retx_bytes_sent;
 }
 
 
@@ -465,7 +597,15 @@ bool RTCStatsCollector::OpenStatsFile(const std::string& foldername) {
     average_stats_file_ << "timestamp_ms,frames_decoded,frames_dropped,frames_received,"
                        "framerate,jitter_buffer_delay_ms,min_playout_delay_ms,video_width,video_height,"
                        "total_decode_time_ms,total_bytes_received,bitrates,overall_avg_bitrates,"
-                       "sender_period_bitrate,sender_overall_bitrate,decoder_implementation\n";
+                       "sender_period_bitrate,sender_overall_bitrate,decoder_implementation,"
+                       "period_packets_received,period_packets_lost,loss_ratio,"
+                       "period_packets_discarded,"
+                       "period_fec_packets_received,period_fec_packets_discarded,"
+                       "period_packets_repaired,"
+                       "period_fec_bytes_recv,period_fec_bytes_sent,fec_byte_ratio,"
+                       "period_retx_pkts_recv,period_retx_bytes_recv,"
+                       "period_retx_pkts_sent,period_retx_bytes_sent,"
+                       "retransmission_ratio\n";
     average_stats_file_.flush();
 
     return true;

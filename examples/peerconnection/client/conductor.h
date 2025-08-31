@@ -42,6 +42,8 @@ namespace cricket {
 class VideoRenderer;
 }  // namespace cricket
 
+class MyDataObserver;
+
 class Conductor : public webrtc::PeerConnectionObserver,
                   public webrtc::CreateSessionDescriptionObserver,
                   public PeerConnectionClientObserver,
@@ -96,6 +98,7 @@ class Conductor : public webrtc::PeerConnectionObserver,
   void DeletePeerConnection();
   void EnsureStreamingUI();
   void AddTracks();
+  void AddSCTPs();
 
   //
   // PeerConnectionObserver implementation.
@@ -110,7 +113,7 @@ class Conductor : public webrtc::PeerConnectionObserver,
   void OnRemoveTrack(
       rtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver) override;
   void OnDataChannel(
-      rtc::scoped_refptr<webrtc::DataChannelInterface> channel) override {}
+      rtc::scoped_refptr<webrtc::DataChannelInterface> channel) override;
   void OnRenegotiationNeeded() override {}
   void OnIceConnectionChange(
       webrtc::PeerConnectionInterface::IceConnectionState new_state) override {}
@@ -168,6 +171,10 @@ class Conductor : public webrtc::PeerConnectionObserver,
   rtc::scoped_refptr<webrtc::PeerConnectionInterface> peer_connection_;
   rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface>
       peer_connection_factory_;
+
+  rtc::scoped_refptr<webrtc::DataChannelInterface> data_channel_;
+  std::unique_ptr<MyDataObserver> data_observer_;
+
   PeerConnectionClient* client_;
   MainWindow* main_wnd_;
   std::deque<std::string*> pending_messages_;

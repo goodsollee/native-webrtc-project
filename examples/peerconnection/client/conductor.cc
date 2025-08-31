@@ -70,6 +70,7 @@
 
 #include <stdlib.h>  // C-style header instead of <cstdlib>
 #include <ctime>
+#include <sstream>
 
 namespace {
 using webrtc::test::TestVideoCapturer;
@@ -217,6 +218,33 @@ private:
 };
 */
 
+class MyDataObserver : public webrtc::DataChannelObserver {
+ public:
+  explicit MyDataObserver(rtc::scoped_refptr<webrtc::DataChannelInterface> channel)
+      : channel_(std::move(channel)) {
+    channel_->RegisterObserver(this);
+  }
+  ~MyDataObserver() override { channel_->UnregisterObserver(); }
+
+  void OnStateChange() override {
+    if (channel_->state() == webrtc::DataChannelInterface::kOpen) {
+      const std::string kPattern = "hello data";
+      channel_->Send(webrtc::DataBuffer(kPattern));
+    }
+  }
+
+  void OnMessage(const webrtc::DataBuffer& buffer) override {
+    std::string data(buffer.data.cdata<char>(), buffer.data.size());
+    RTC_LOG(LS_INFO) << "DataChannel message: " << data;
+    if (data != "hello data") {
+      RTC_LOG(LS_WARNING) << "Unexpected data received";
+    }
+  }
+
+ private:
+  rtc::scoped_refptr<webrtc::DataChannelInterface> channel_;
+};
+
 bool Conductor::curl_initialized_ = false;
 
 Conductor::Conductor(PeerConnectionClient* client, MainWindow* main_wnd, bool headless)
@@ -356,6 +384,9 @@ bool Conductor::InitializePeerConnection() {
   }
 
   AddTracks();
+
+  // Added
+  AddSCTPs();
 
   return peer_connection_ != nullptr;
 }
@@ -522,6 +553,14 @@ void Conductor::OnRemoveTrack(
       //stats_collector_->Stop();
     }
 }
+
+void Conductor::OnDataChannel(
+    rtc::scoped_refptr<webrtc::DataChannelInterface> channel) {
+  data_channel_ = channel;
+  data_observer_ = std::make_unique<MyDataObserver>(data_channel_);
+}
+
+
 
 void Conductor::OnIceCandidate(const webrtc::IceCandidateInterface* candidate) {
   RTC_LOG(LS_INFO) << __FUNCTION__ << " " << candidate->sdp_mline_index();
@@ -1197,6 +1236,15 @@ void Conductor::AddTracks() {
     RTC_LOG(LS_INFO) << "Headless mode? "<< headless_;
     main_wnd_->SwitchToStreamingUI();
   }
+}
+
+void Conductor::AddSCTPs () {
+  webrtc::DataChannelInit cfg;
+  cfg.ordered = true;                   // allow out-of-order delivery
+  cfg.maxRetransmits = 5;                // partial reliability
+  cfg.priority = webrtc::PriorityValue(webrtc::Priority::kLow);
+  data_channel_ = peer_connection_->CreateDataChannel("bulk", &cfg);
+  data_observer_ = std::make_unique<MyDataObserver>(data_channel_);
 }
 
 void Conductor::DisconnectFromCurrentPeer() {

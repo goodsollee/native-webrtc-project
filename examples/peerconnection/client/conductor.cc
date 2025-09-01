@@ -241,6 +241,8 @@ class MyDataObserver : public webrtc::DataChannelObserver {
     if (channel_->state() == webrtc::DataChannelInterface::kOpen) {
       RTC_LOG(LS_INFO) << "[SCTP] " << channel_->label() << " opened";
     }
+    const std::string kPattern = "hello data";
+    channel_->Send(webrtc::DataBuffer(kPattern));
   }
 
   void OnMessage(const webrtc::DataBuffer& buffer) override {
@@ -613,8 +615,8 @@ void Conductor::OnDataChannel(
     f.label = label;
   }
 
-  RTC_LOG(LS_INFO) << "Bound incoming channel '" << label << "' to kind "
-                   << static_cast<int>(kind);
+  std::cout << "Bound incoming channel '" << label << "' to kind "
+                   << static_cast<int>(kind) << " id= " << channel->id()<< std::endl;
 }
 
 void Conductor::OnIceCandidate(const webrtc::IceCandidateInterface* candidate) {
@@ -1294,20 +1296,21 @@ void Conductor::AddTracks() {
 }
 
 void Conductor::AddSCTPs() {
-  webrtc::DataChannelInit lowprio;   lowprio.ordered = true;  lowprio.maxRetransmits = 5;
+  webrtc::DataChannelInit lowprio; lowprio.negotiated = true; lowprio.id = 0;  lowprio.ordered = true;  lowprio.maxRetransmits = 5;
   lowprio.priority = webrtc::PriorityValue(webrtc::Priority::kLow);
 
-  webrtc::DataChannelInit highprio;  highprio.ordered = true; highprio.maxRetransmits = 0;
+  webrtc::DataChannelInit highprio; highprio.id = 1;  highprio.ordered = true; highprio.maxRetransmits = 0;
   highprio.priority = webrtc::PriorityValue(webrtc::Priority::kHigh);
 
   // Example: open three flows
   AddSctpFlow(TrafficKind::kBulkTest, "bulk", lowprio);
-  AddSctpFlow(TrafficKind::kKv,       "kv",   highprio);
-  AddSctpFlow(TrafficKind::kMesh,     "mesh", lowprio);
+  //AddSctpFlow(TrafficKind::kKv,       "kv",   highprio);
+  //AddSctpFlow(TrafficKind::kMesh,     "mesh", lowprio);
 
-  if (!bulk_receiver_)
+  if (!bulk_receiver_) {
     bulk_receiver_ = std::make_unique<sctp::bulk::Receiver>();
-  bulk_receiver_->Attach(*this);
+    bulk_receiver_->Attach(*this);
+  }
 }
 
 void Conductor::DisconnectFromCurrentPeer() {
@@ -1563,30 +1566,32 @@ void Conductor::GetReceiverVideoStats() {
 
 bool Conductor::AddSctpFlow(TrafficKind kind, const std::string& label, const webrtc::DataChannelInit& cfg) {
   if (!peer_connection_) return false;
-  if (flows_.count(kind)) return true;  // already exists
+
+  auto it = flows_.find(kind);
+  if (it != flows_.end() && it->second.channel) return true;
 
   auto ch = peer_connection_->CreateDataChannel(label, &cfg);
-  if (!ch) {
-    RTC_LOG(LS_ERROR) << "CreateDataChannel failed for " << label;
-    return false;
-  }
+  if (!ch) { RTC_LOG(LS_ERROR) << "CreateDataChannel failed for " << label; return false; }
 
-  // Build observer that calls the handler registered later (or logs).
   auto on_payload = [this, kind](absl::Span<const uint8_t> bytes) {
-    auto it = flows_.find(kind);
-    if (it == flows_.end()) return;
-    if (it->second.handler) it->second.handler(bytes);
-    else RTC_LOG(LS_WARNING) << "No handler set for flow kind " << static_cast<int>(kind);
+    auto fit = flows_.find(kind);
+    if (fit != flows_.end() && fit->second.handler) fit->second.handler(bytes);
   };
 
-  Flow f;
-  f.channel = ch;
-  f.observer = std::make_unique<MyDataObserver>(ch, on_payload);
-  f.label = label;
-  flows_.emplace(kind, std::move(f));
+  if (it == flows_.end()) {
+    Flow f; f.channel = ch; f.observer = std::make_unique<MyDataObserver>(ch, on_payload); f.label = label;
+    flows_.emplace(kind, std::move(f));
+  } else {
+    it->second.channel  = ch;  
+    it->second.observer = std::make_unique<MyDataObserver>(ch, on_payload);
+    it->second.label    = label;
+  }
 
+  std::cout << "Bound outgoing channel '" << label << "' to kind "
+                   << static_cast<int>(kind) << " id= " << ch->id()<< std::endl;
   return true;
 }
+
 
 void Conductor::SendPayload(TrafficKind kind, absl::Span<const uint8_t> data) {
   auto it = flows_.find(kind);
@@ -1595,15 +1600,17 @@ void Conductor::SendPayload(TrafficKind kind, absl::Span<const uint8_t> data) {
     RTC_LOG(LS_WARNING) << "Flow " << static_cast<int>(kind) << " not ready";
     return;
   }
-
   // If you keep the 1-byte header, prepend it:
   std::vector<uint8_t> buf;
   buf.reserve(data.size() + 1);
   buf.push_back(static_cast<uint8_t>(kind));
   buf.insert(buf.end(), data.begin(), data.end());
 
-  it->second.channel->Send(
-      webrtc::DataBuffer(rtc::CopyOnWriteBuffer(buf), true));
+
+    const std::string kPattern = "hello data";
+  it->second.channel->Send(webrtc::DataBuffer(kPattern));
+
+  it->second.channel->Send(webrtc::DataBuffer(rtc::CopyOnWriteBuffer(buf), true));
 }
 
 void Conductor::RegisterPayloadHandler(TrafficKind kind, PayloadHandler handler) {

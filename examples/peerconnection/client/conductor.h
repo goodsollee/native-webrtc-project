@@ -97,7 +97,7 @@ class Conductor : public webrtc::PeerConnectionObserver,
 
   void SetLogDirectory(const std::string& log_dir) { log_dir_ = log_dir; }
 
-  enum class TrafficKind {kKv, kMesh, kBulkTest};
+  enum class TrafficKind {kKv, kMesh, kBulkTest, kControl};
   using PayloadHandler = std::function<void(absl::Span<const uint8_t>)>;
 
   bool AddSctpFlow(TrafficKind kind, const std::string& label, const webrtc::DataChannelInit& cfg);
@@ -197,7 +197,7 @@ class Conductor : public webrtc::PeerConnectionObserver,
   // One flow = one channel + its observer + its handler.
   struct Flow {
     rtc::scoped_refptr<webrtc::DataChannelInterface> channel;
-    std::unique_ptr<MyDataObserver> observer;
+   std::unique_ptr<MyDataObserver> observer;
     PayloadHandler handler;  // nullable until user registers it
     std::string label;       // for debugging / remote mapping
   };
@@ -209,7 +209,8 @@ class Conductor : public webrtc::PeerConnectionObserver,
    std::unordered_map<std::string, TrafficKind> label2kind_ = {
        {"kv", TrafficKind::kKv},
        {"mesh", TrafficKind::kMesh},
-       {"bulk", TrafficKind::kBulkTest}
+       {"bulk", TrafficKind::kBulkTest},
+       {"ctrl", TrafficKind::kControl}
    };
 
    // Bulk SCTP traffic helpers.

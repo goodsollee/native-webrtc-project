@@ -1,0 +1,64 @@
+#include "sctp_traffic/bulk/bulk_sender.h"
+#include "examples/peerconnection/client/conductor.h"
+#include "rtc_base/time_utils.h"
+#include "rtc_base/logging.h"
+
+using Kind = Conductor::TrafficKind;
+
+namespace sctp::bulk {
+
+Sender::Sender(Config cfg) : cfg_(cfg) {}
+Sender::~Sender() { Stop(); }
+
+void Sender::Start(Conductor& c) {
+  conductor_ = &c;
+
+  target_bps_ = cfg_.target_mbps * 1e6;
+  payload_.assign(cfg_.chunk_bytes, 0x00);
+
+  credit_bytes_ = 0.0;
+  last_ms_ = rtc::TimeMillis();
+
+  if (task_.Running()) task_.Stop();
+  task_ = rtc::RepeatingTaskHandle::Start(
+      *conductor_->signaling_thread(), [this]() {
+        PumpOnce(rtc::TimeMillis());
+        return webrtc::TimeDelta::Millis(cfg_.pump_interval_ms);
+      });
+
+  RTC_LOG(LS_INFO) << "[BULK][TX] started: " << cfg_.target_mbps
+                   << " Mbps, chunk=" << cfg_.chunk_bytes << " B";
+}
+
+void Sender::Stop() {
+  if (task_.Running()) task_.Stop();
+  conductor_ = nullptr;
+  RTC_LOG(LS_INFO) << "[BULK][TX] stopped";
+}
+
+void Sender::PumpOnce(int64_t now_ms) {
+  if (!conductor_ || !conductor_->IsFlowOpen(Kind::kBulkTest)) return;
+
+  const double dt = (now_ms - last_ms_) / 1000.0;
+  last_ms_ = now_ms;
+  credit_bytes_ += target_bps_ * dt / 8.0;
+
+  if (conductor_->BufferedAmount(Kind::kBulkTest) > cfg_.buffered_cap) return;
+
+  size_t sent_bytes = 0;
+  while (credit_bytes_ >= static_cast<double>(payload_.size())) {
+    conductor_->SendPayload(Kind::kBulkTest, absl::Span<const uint8_t>(payload_.data(), payload_.size()));
+    credit_bytes_ -= payload_.size();
+    sent_bytes += payload_.size();
+
+    if (conductor_->BufferedAmount(Kind::kBulkTest) > cfg_.buffered_cap) break;
+  }
+
+  if (sent_bytes > 0 && dt > 0) {
+    const double mbps = (sent_bytes * 8.0) / (dt * 1e6);
+    RTC_LOG(LS_VERBOSE) << "[BULK][TX] ~" << mbps << " Mbps, buffered="
+                        << conductor_->BufferedAmount(Kind::kBulkTest);
+  }
+}
+
+} // namespace sctp::bulk

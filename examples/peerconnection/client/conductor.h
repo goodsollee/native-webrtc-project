@@ -16,6 +16,9 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <cstdint>
+#include <functional>
+#include <optional>
 
 #include "api/data_channel_interface.h"
 #include "api/jsep.h"
@@ -25,6 +28,7 @@
 #include "api/rtp_receiver_interface.h"
 #include "api/scoped_refptr.h"
 #include "api/task_queue/task_queue_factory.h"
+#include "absl/types/span.h"
 #include "examples/peerconnection/client/main_wnd.h"
 #include "examples/peerconnection/client/peer_connection_client.h"
 #include "rtc_base/thread.h"
@@ -33,6 +37,7 @@
 #include "examples/peerconnection/client/websocket_client.h"
 #include <curl/curl.h>
 #include "json/value.h"
+#include <iostream>
 
 namespace webrtc {
 class VideoCaptureModule;
@@ -89,6 +94,18 @@ class Conductor : public webrtc::PeerConnectionObserver,
   void SetHeadless(bool headless) { headless_ = headless; }
 
   void SetLogDirectory(const std::string& log_dir) { log_dir_ = log_dir; }
+
+  enum class TrafficKind {kKv, kMesh, kBulkTest};
+  using PayloadHandler = std::function<void(absl::Span<const uint8_t>)>;
+
+  bool AddSctpFlow(TrafficKind kind, const std::string& label, const webrtc::DataChannelInit& cfg);
+  void SendPayload(TrafficKind kind, absl::Span<const uint8_t> data);
+  void RegisterPayloadHandler(TrafficKind kind, PayloadHandler handler);
+
+  bool IsFlowOpen(TrafficKind kind) const;
+  uint64_t BufferedAmount(TrafficKind kind) const;
+
+  rtc::Thread* signaling_thread() const { return signaling_thread_.get(); }
 
  protected:
   ~Conductor();
@@ -172,8 +189,31 @@ class Conductor : public webrtc::PeerConnectionObserver,
   rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface>
       peer_connection_factory_;
 
+  // One flow = one channel + its observer + its handler.
+  struct Flow {
+    rtc::scoped_refptr<webrtc::DataChannelInterface> channel;
+    std::unique_ptr<MyDataObserver> observer;
+    PayloadHandler handler;  // nullable until user registers it
+    std::string label;       // for debugging / remote mapping
+  };
+
+   // Map flows by kind
+   std::unordered_map<TrafficKind, Flow> flows_;
+
+   // Optional: map by lowercased label for remote-initiated channels
+   std::unordered_map<std::string, TrafficKind> label2kind_ = {
+       {"kv", TrafficKind::kKv},
+       {"mesh", TrafficKind::kMesh},
+       {"bulk", TrafficKind::kBulkTest}
+   };
+
+  /*
   rtc::scoped_refptr<webrtc::DataChannelInterface> data_channel_;
   std::unique_ptr<MyDataObserver> data_observer_;
+
+  std::optional<TrafficKind> payload_kind_;
+  PayloadHandler payload_handler_;
+  */
 
   PeerConnectionClient* client_;
   MainWindow* main_wnd_;

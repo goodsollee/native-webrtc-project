@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <iostream>
 #include <map>
 
 #include "api/media_stream_interface.h"
@@ -30,6 +31,7 @@
 #include "api/video/i420_buffer.h"
 #include "api/video/video_frame.h"
 #include "api/video/video_frame_buffer.h"
+#include "api/video/video_frame_type.h"
 #include "api/video/video_rotation.h"
 #include "api/video/video_source_interface.h"
 #include "examples/peerconnection/client/main_wnd.h"
@@ -37,9 +39,6 @@
 #include "rtc_base/checks.h"
 #include "rtc_base/logging.h"
 #include "third_party/libyuv/include/libyuv/convert_from.h"
-#include "api/video/video_frame_type.h" 
-
-#include <iostream>
 
 namespace {
 
@@ -48,13 +47,16 @@ namespace {
 // GtkMainWnd instance.
 //
 
-
 static const char* ToCString(webrtc::VideoFrameType t) {
   switch (t) {
-    case webrtc::VideoFrameType::kEmptyFrame:   return "empty";
-    case webrtc::VideoFrameType::kVideoFrameKey:return "key";
-    case webrtc::VideoFrameType::kVideoFrameDelta:return "delta";
-    default: return "unknown";
+    case webrtc::VideoFrameType::kEmptyFrame:
+      return "empty";
+    case webrtc::VideoFrameType::kVideoFrameKey:
+      return "key";
+    case webrtc::VideoFrameType::kVideoFrameDelta:
+      return "delta";
+    default:
+      return "unknown";
   }
 }
 
@@ -67,6 +69,10 @@ gboolean OnDestroyedCallback(GtkWidget* widget,
 
 void OnClickedCallback(GtkWidget* widget, gpointer data) {
   reinterpret_cast<GtkMainWnd*>(data)->OnClicked(widget);
+}
+
+void OnBulkClickedCallback(GtkWidget* widget, gpointer data) {
+  reinterpret_cast<GtkMainWnd*>(data)->OnBulkClicked(widget);
 }
 
 gboolean SimulateButtonClick(gpointer button) {
@@ -169,11 +175,13 @@ GtkMainWnd::GtkMainWnd(const char* server,
                        bool autocall,
                        bool headless)
     : window_(NULL),
+      overlay_(NULL),
       draw_area_(NULL),
       vbox_(NULL),
       server_edit_(NULL),
       port_edit_(NULL),
       peer_list_(NULL),
+      bulk_button_(NULL),
       callback_(NULL),
       server_(server),
       autoconnect_(autoconnect),
@@ -190,16 +198,19 @@ GtkMainWnd::~GtkMainWnd() {
 
 void GtkMainWnd::RegisterObserver(MainWndCallback* callback) {
   callback_ = callback;
-  // juheon added: in headless mode, call SwitchToConnectUI() once more for autoconnection
-  if(headless_){
+  // juheon added: in headless mode, call SwitchToConnectUI() once more for
+  // autoconnection
+  if (headless_) {
     SwitchToConnectUI();
   }
 }
 
 bool GtkMainWnd::IsWindow() {
   // juheon added: in headless mode, always return true
-  if(headless_) return true;
-  else  return window_ != NULL && GTK_IS_WINDOW(window_);
+  if (headless_)
+    return true;
+  else
+    return window_ != NULL && GTK_IS_WINDOW(window_);
 }
 
 void GtkMainWnd::MessageBox(const char* caption,
@@ -252,11 +263,11 @@ void GtkMainWnd::QueueUIThreadCallback(int msg_id, void* data) {
 
 bool GtkMainWnd::Create() {
   // juheon added: trigger this only when not in headless mode
-  if(headless_){
+  if (headless_) {
     RTC_LOG(LS_INFO) << "headless mode, do not create window!\n";
     // SwitchToConnectUI(); // no use doing this here.. don't have callback now
     return true;
-  }else{
+  } else {
     RTC_DCHECK(window_ == NULL);
 
     window_ = gtk_window_new(GTK_WINDOW_TOPLEVEL);
@@ -265,9 +276,9 @@ bool GtkMainWnd::Create() {
       gtk_window_set_default_size(GTK_WINDOW(window_), 640, 480);
       gtk_window_set_title(GTK_WINDOW(window_), "PeerConnection client");
       g_signal_connect(G_OBJECT(window_), "delete-event",
-                      G_CALLBACK(&OnDestroyedCallback), this);
-      g_signal_connect(window_, "key-press-event", G_CALLBACK(OnKeyPressCallback),
-                      this);
+                       G_CALLBACK(&OnDestroyedCallback), this);
+      g_signal_connect(window_, "key-press-event",
+                       G_CALLBACK(OnKeyPressCallback), this);
 
       SwitchToConnectUI();
     }
@@ -278,9 +289,9 @@ bool GtkMainWnd::Create() {
 
 bool GtkMainWnd::Destroy() {
   // juheon added: skip in headless mode
-  if(headless_){
+  if (headless_) {
     return true;
-  }else{
+  } else {
     if (!IsWindow())
       return false;
 
@@ -292,15 +303,16 @@ bool GtkMainWnd::Destroy() {
 }
 
 void GtkMainWnd::SwitchToConnectUI() {
-  if(headless_){ // juheon added: in headless mode: make connection right away
+  if (headless_) {  // juheon added: in headless mode: make connection right
+                    // away
     int port = port_.length() ? atoi(port_.c_str()) : 0;
     RTC_LOG(LS_INFO) << "server: " << server_ << "port: " << port << "\n";
-    if(callback_){
+    if (callback_) {
       callback_->StartLogin(server_, port);
-    }else{
+    } else {
       RTC_LOG(LS_INFO) << "null callback!\n";
     }
-  }else{
+  } else {
     RTC_LOG(LS_INFO) << __FUNCTION__;
 
     RTC_DCHECK(IsWindow());
@@ -311,6 +323,13 @@ void GtkMainWnd::SwitchToConnectUI() {
     if (peer_list_) {
       gtk_widget_destroy(peer_list_);
       peer_list_ = NULL;
+    } else if (overlay_) {
+      gtk_widget_destroy(overlay_);
+      overlay_ = NULL;
+      draw_area_ = NULL;
+      bulk_button_ = NULL;
+      draw_buffer_.SetSize(0);
+      bulk_started_ = false;
     }
 
     vbox_ = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
@@ -350,20 +369,21 @@ void GtkMainWnd::SwitchToConnectUI() {
 }
 
 void GtkMainWnd::SwitchToPeerList(const Peers& peers) {
-  if(headless_){
-    if (peers.begin() != peers.end()){
-      if(autocall_){
+  if (headless_) {
+    if (peers.begin() != peers.end()) {
+      if (autocall_) {
         // juheon added: in headless mode, make connection from peers right away
-        int id = 2; // temp: this should be replaced with the output of gtk_tree_model_get(model, &iter, 0, &text, 1, &id, -1);
+        int id = 2;  // temp: this should be replaced with the output of
+                     // gtk_tree_model_get(model, &iter, 0, &text, 1, &id, -1);
         RTC_LOG(LS_INFO) << "(headless) Connect to peer " << id << "\n";
         callback_->ConnectToPeer(id);
-      }//else{
+      }  // else{
       //  RTC_LOG(LS_INFO) << "not in autocall mode\n";
       //}
-    }else{
+    } else {
       RTC_LOG(LS_INFO) << "no peers to connect!\n";
     }
-  }else{
+  } else {
     RTC_LOG(LS_INFO) << __FUNCTION__;
 
     if (!peer_list_) {
@@ -373,15 +393,18 @@ void GtkMainWnd::SwitchToPeerList(const Peers& peers) {
         vbox_ = NULL;
         server_edit_ = NULL;
         port_edit_ = NULL;
-      } else if (draw_area_) {
-        gtk_widget_destroy(draw_area_);
+      } else if (overlay_) {
+        gtk_widget_destroy(overlay_);
+        overlay_ = NULL;
         draw_area_ = NULL;
+        bulk_button_ = NULL;
         draw_buffer_.SetSize(0);
+        bulk_started_ = false;
       }
 
       peer_list_ = gtk_tree_view_new();
       g_signal_connect(peer_list_, "row-activated",
-                      G_CALLBACK(OnRowActivatedCallback), this);
+                       G_CALLBACK(OnRowActivatedCallback), this);
       gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(peer_list_), FALSE);
       InitializeList(peer_list_);
       gtk_container_add(GTK_CONTAINER(window_), peer_list_);
@@ -404,24 +427,26 @@ void GtkMainWnd::SwitchToPeerList(const Peers& peers) {
 void GtkMainWnd::SwitchToStreamingUI() {
   RTC_LOG(LS_INFO) << "SwitchToStreamingUI: Current UI state=" << current_ui()
                    << ", draw_area_=" << (draw_area_ ? "exists" : "null");
-  if (headless_){
+  if (headless_) {
     RTC_LOG(LS_INFO) << "headless mode, skip!";
-  }
-  else {
+  } else {
     // First clean up any existing UI elements
     if (vbox_) {
       gtk_container_remove(GTK_CONTAINER(window_), vbox_);
       gtk_widget_destroy(vbox_);
       vbox_ = NULL;
-      server_edit_ = NULL; 
+      server_edit_ = NULL;
       port_edit_ = NULL;
     }
-    
-    if (draw_area_) {
-      gtk_widget_destroy(draw_area_);
+
+    if (overlay_) {
+      gtk_widget_destroy(overlay_);
+      overlay_ = NULL;
       draw_area_ = NULL;
+      bulk_button_ = NULL;
+      bulk_started_ = false;
     }
-    
+
     if (peer_list_) {
       gtk_container_remove(GTK_CONTAINER(window_), peer_list_);
       gtk_widget_destroy(peer_list_);
@@ -432,14 +457,24 @@ void GtkMainWnd::SwitchToStreamingUI() {
 
     // Set fixed window size
     desired_width_ = 1280;  // Set your desired fixed width
-    desired_height_ = 720; // Set your desired fixed height
-    gtk_window_set_resizable(GTK_WINDOW(window_), FALSE); // Prevent resizing
+    desired_height_ = 720;  // Set your desired fixed height
+    gtk_window_set_resizable(GTK_WINDOW(window_), FALSE);  // Prevent resizing
 
+    overlay_ = gtk_overlay_new();
     draw_area_ = gtk_drawing_area_new();
-    // Set the drawing area to maintain fixed size
     gtk_widget_set_size_request(draw_area_, desired_width_, desired_height_);
-    gtk_container_add(GTK_CONTAINER(window_), draw_area_);
+    gtk_container_add(GTK_CONTAINER(overlay_), draw_area_);
     g_signal_connect(G_OBJECT(draw_area_), "draw", G_CALLBACK(&::Draw), this);
+
+    bulk_button_ = gtk_button_new_with_label("Start Bulk");
+    gtk_widget_set_halign(bulk_button_, GTK_ALIGN_START);
+    gtk_widget_set_valign(bulk_button_, GTK_ALIGN_START);
+    g_signal_connect(bulk_button_, "clicked", G_CALLBACK(OnBulkClickedCallback),
+                     this);
+    gtk_overlay_add_overlay(GTK_OVERLAY(overlay_), bulk_button_);
+    bulk_started_ = false;
+
+    gtk_container_add(GTK_CONTAINER(window_), overlay_);
 
     gtk_widget_show_all(window_);
   }
@@ -448,11 +483,14 @@ void GtkMainWnd::SwitchToStreamingUI() {
 void GtkMainWnd::OnDestroyed(GtkWidget* widget, GdkEvent* event) {
   callback_->Close();
   window_ = NULL;
+  overlay_ = NULL;
   draw_area_ = NULL;
   vbox_ = NULL;
   server_edit_ = NULL;
   port_edit_ = NULL;
   peer_list_ = NULL;
+  bulk_button_ = NULL;
+  bulk_started_ = false;
 }
 
 void GtkMainWnd::OnClicked(GtkWidget* widget) {
@@ -464,6 +502,18 @@ void GtkMainWnd::OnClicked(GtkWidget* widget) {
   port_ = gtk_entry_get_text(GTK_ENTRY(port_edit_));
   int port = port_.length() ? atoi(port_.c_str()) : 0;
   callback_->StartLogin(server_, port);
+}
+
+void GtkMainWnd::OnBulkClicked(GtkWidget* widget) {
+  if (!bulk_started_) {
+    callback_->StartBulkSctp();
+    bulk_started_ = true;
+    gtk_button_set_label(GTK_BUTTON(widget), "Stop Bulk");
+  } else {
+    callback_->StopBulkSctp();
+    bulk_started_ = false;
+    gtk_button_set_label(GTK_BUTTON(widget), "Start Bulk");
+  }
 }
 
 void GtkMainWnd::OnKeyPress(GtkWidget* widget, GdkEventKey* key) {
@@ -539,30 +589,31 @@ void GtkMainWnd::Draw(GtkWidget* widget, cairo_t* cr) {
   double scale_x = static_cast<double>(desired_width_) / width_;
   double scale_y = static_cast<double>(desired_height_) / height_;
   double scale = std::min(scale_x, scale_y);
-  
+
   double x = (desired_width_ - (width_ * scale)) / 2;
   double y = (desired_height_ - (height_ * scale)) / 2;
 
   cairo_translate(cr, x, y);
   cairo_scale(cr, scale, scale);
-  
+
   cairo_format_t format = CAIRO_FORMAT_ARGB32;
   cairo_surface_t* surface = cairo_image_surface_create_for_data(
       draw_buffer_.data(), format, width_, height_,
       cairo_format_stride_for_width(format, width_));
-      
+
   cairo_set_source_surface(cr, surface, 0, 0);
   cairo_pattern_set_filter(cairo_get_source(cr), CAIRO_FILTER_BILINEAR);
   cairo_rectangle(cr, 0, 0, width_, height_);
   cairo_fill(cr);
-  
+
   cairo_surface_destroy(surface);
 
   // Reset transform for text overlay
   cairo_identity_matrix(cr);
 
   // Draw stats overlay
-  cairo_select_font_face(cr, "monospace", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
+  cairo_select_font_face(cr, "monospace", CAIRO_FONT_SLANT_NORMAL,
+                         CAIRO_FONT_WEIGHT_BOLD);
   cairo_set_font_size(cr, 14.0);
   cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);  // White text
 
@@ -570,14 +621,14 @@ void GtkMainWnd::Draw(GtkWidget* widget, cairo_t* cr) {
   float bitrate = remote_renderer_ ? remote_renderer_->bitrate() : 0.0f;
 
   char stats_text[128];
-  snprintf(stats_text, sizeof(stats_text), 
-           "Resolution: %dx%d  FPS: %.1f  Bitrate: %.3f Mbps", 
-           width_, height_, fps, bitrate/1000.0f);
-  
+  snprintf(stats_text, sizeof(stats_text),
+           "Resolution: %dx%d  FPS: %.1f  Bitrate: %.3f Mbps", width_, height_,
+           fps, bitrate / 1000.0f);
+
   // Add black background for better readability
   cairo_text_extents_t extents;
   cairo_text_extents(cr, stats_text, &extents);
-  
+
   cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, 0.5);  // Semi-transparent black
   cairo_rectangle(cr, 8, 8, extents.width + 4, extents.height + 4);
   cairo_fill(cr);
@@ -590,8 +641,8 @@ void GtkMainWnd::Draw(GtkWidget* widget, cairo_t* cr) {
 
 // In the anonymous namespace where other callbacks are defined
 gboolean GtkMainWnd::OnConfigureCallback(GtkWidget* widget,
-                            GdkEventConfigure* event,
-                            gpointer data) {
+                                         GdkEventConfigure* event,
+                                         gpointer data) {
   reinterpret_cast<GtkMainWnd*>(data)->OnConfigure(widget, event);
   return FALSE;
 }
@@ -605,31 +656,32 @@ void GtkMainWnd::OnConfigure(GtkWidget* widget, GdkEventConfigure* event) {
 void GtkMainWnd::ResizeWindow(int width, int height) {
   if (window_resizing_)
     return;
-    
+
   window_resizing_ = true;
-  
+
   // Calculate scale to fit video in window while maintaining aspect ratio
   double video_aspect = static_cast<double>(width_) / height_;
   double window_aspect = static_cast<double>(width) / height;
-  
+
   if (video_aspect > window_aspect) {
     // Video is wider than window - scale to fit width
     scale_ = static_cast<double>(width) / width_;
     desired_width_ = width;
     desired_height_ = height_ * scale_;
   } else {
-    // Video is taller than window - scale to fit height 
+    // Video is taller than window - scale to fit height
     scale_ = static_cast<double>(height) / height_;
     desired_height_ = height;
     desired_width_ = width_ * scale_;
   }
-  
-  //gtk_window_resize(GTK_WINDOW(window_), desired_width_, desired_height_);
+
+  // gtk_window_resize(GTK_WINDOW(window_), desired_width_, desired_height_);
   window_resizing_ = false;
 }
 
 std::string GtkMainWnd::GetLogFolder() const {
-  return callback_->GetLogFolder();  // callback_ is MainWndCallback which Conductor implements
+  return callback_->GetLogFolder();  // callback_ is MainWndCallback which
+                                     // Conductor implements
 }
 
 GtkMainWnd::VideoRenderer::VideoRenderer(
@@ -664,23 +716,24 @@ void GtkMainWnd::VideoRenderer::SetSize(int width, int height) {
 }
 
 // juheon added: print current time to check frame interval
-#include <ctime>  
 #include <sys/time.h>
 
-void print_current_time(){
-    struct timeval time_now{};
-    gettimeofday(&time_now, nullptr);
+#include <ctime>
 
-    long int sec = static_cast<long int>(time_now.tv_sec)%86400;
-    long int usec = static_cast<long int>(time_now.tv_usec);
+void print_current_time() {
+  struct timeval time_now{};
+  gettimeofday(&time_now, nullptr);
 
-    long int hour = (sec/3600 + 9)%24;
-    long int min = (sec%3600)/60;
-    long int s = (sec%3600)%60;
-    long int ms = usec/1000;
+  long int sec = static_cast<long int>(time_now.tv_sec) % 86400;
+  long int usec = static_cast<long int>(time_now.tv_usec);
 
-    //std::cout<<hour<<":"<<min<<":"<<s<<"."<<ms<<", ";
-    printf("%ld:%ld:%ld.%ld, ", hour, min, s, ms);
+  long int hour = (sec / 3600 + 9) % 24;
+  long int min = (sec % 3600) / 60;
+  long int s = (sec % 3600) % 60;
+  long int ms = usec / 1000;
+
+  // std::cout<<hour<<":"<<min<<":"<<s<<"."<<ms<<", ";
+  printf("%ld:%ld:%ld.%ld, ", hour, min, s, ms);
 }
 
 void GtkMainWnd::VideoRenderer::OnFrame(const webrtc::VideoFrame& video_frame) {
@@ -697,21 +750,23 @@ void GtkMainWnd::VideoRenderer::OnFrame(const webrtc::VideoFrame& video_frame) {
   if (last_frame_time_ == 0) {
     last_frame_time_ = current_time;
   }
-  
+
   frame_count_++;
 
   // Calculate bitrate
-  size_t frame_size = video_frame.frame_timing().encoded_size; // Get frame size in bytes
+  size_t frame_size =
+      video_frame.frame_timing().encoded_size;  // Get frame size in bytes
   total_bytes_ += frame_size;
 
   // Update FPS and bitrate every second
   if (current_time - last_frame_time_ >= 1000) {
     // FPS calculation
     current_fps_ = frame_count_ * 1000.0f / (current_time - last_frame_time_);
-    
+
     // Bitrate calculation (bits per second)
-    current_bitrate_ = (total_bytes_ * 8.0f / 1024) * (1000.0f / (current_time - last_frame_time_));
-    
+    current_bitrate_ = (total_bytes_ * 8.0f / 1024) *
+                       (1000.0f / (current_time - last_frame_time_));
+
     // Reset counters
     frame_count_ = 0;
     total_bytes_ = 0;
@@ -719,8 +774,9 @@ void GtkMainWnd::VideoRenderer::OnFrame(const webrtc::VideoFrame& video_frame) {
 
     // Calculate elapsed time in seconds since start
     double elapsed_seconds = (current_time - start_time_) / 1000.0;
-    std::cout << "Elapsed time: " << elapsed_seconds << "s, Frame rate: " 
-              << current_fps_ << ", Bitrate: " << current_bitrate_ << std::endl;
+    std::cout << "Elapsed time: " << elapsed_seconds
+              << "s, Frame rate: " << current_fps_
+              << ", Bitrate: " << current_bitrate_ << std::endl;
   }
 
   // Log frame metrics
@@ -736,11 +792,10 @@ void GtkMainWnd::VideoRenderer::OnFrame(const webrtc::VideoFrame& video_frame) {
     // Keep original video dimensions
     SetSize(buffer->width(), buffer->height());
 
-    libyuv::I420ToARGB(buffer->DataY(), buffer->StrideY(),
-                      buffer->DataU(), buffer->StrideU(), 
-                      buffer->DataV(), buffer->StrideV(),
-                      image_.data(), width_ * 4,
-                      buffer->width(), buffer->height());
+    libyuv::I420ToARGB(buffer->DataY(), buffer->StrideY(), buffer->DataU(),
+                       buffer->StrideU(), buffer->DataV(), buffer->StrideV(),
+                       image_.data(), width_ * 4, buffer->width(),
+                       buffer->height());
 
     gdk_threads_leave();
 
@@ -749,27 +804,31 @@ void GtkMainWnd::VideoRenderer::OnFrame(const webrtc::VideoFrame& video_frame) {
   }
 }
 
-void GtkMainWnd::VideoRenderer::InitializeLogging(const std::string& log_folder) {
+void GtkMainWnd::VideoRenderer::InitializeLogging(
+    const std::string& log_folder) {
   if (logging_initialized_)
     return;
 
   log_folder_ = log_folder;
   std::string log_path = log_folder_ + "/frame_metrics.csv";
-  
+
   frame_log_file_.open(log_path, std::ios::out);
   if (frame_log_file_.is_open()) {
     // Write CSV header
-    frame_log_file_ << "timestamp,rtp_timestamp,first_packet_departure,estimated_first_packet_departure,first_packet_arrival,last_packet_arrival,render,"
-                    << "encode_ms,pacing_ms,network_ms,estimated_network_ms,decode_ms,"
-                    << "frame_construction_delay_ms,inter_frame_delay_ms,"
-                    << "inter_frame_departure_ms,frame_jitter_ms,"  // New columns
-                    << "encoded_size,height,width,min_rtt,avail_bw,"
-                    << "is_keyframe,frame_type\n";
+    frame_log_file_
+        << "timestamp,rtp_timestamp,first_packet_departure,estimated_first_"
+           "packet_departure,first_packet_arrival,last_packet_arrival,render,"
+        << "encode_ms,pacing_ms,network_ms,estimated_network_ms,decode_ms,"
+        << "frame_construction_delay_ms,inter_frame_delay_ms,"
+        << "inter_frame_departure_ms,frame_jitter_ms,"  // New columns
+        << "encoded_size,height,width,min_rtt,avail_bw,"
+        << "is_keyframe,frame_type\n";
     logging_initialized_ = true;
   }
 }
 
-void GtkMainWnd::VideoRenderer::LogFrameMetrics(const webrtc::VideoFrame& frame) {
+void GtkMainWnd::VideoRenderer::LogFrameMetrics(
+    const webrtc::VideoFrame& frame) {
   if (!logging_initialized_ || !frame_log_file_.is_open())
     return;
 
@@ -777,19 +836,22 @@ void GtkMainWnd::VideoRenderer::LogFrameMetrics(const webrtc::VideoFrame& frame)
   int64_t current_time = rtc::TimeMillis();
 
   // Calculate RTP timestamp in milliseconds (90kHz clock -> ms)
-  int rtp_ms = (frame.rtp_timestamp()/90);
+  int rtp_ms = (frame.rtp_timestamp() / 90);
 
   // Calculate inter-frame departure time
   int64_t inter_frame_departure_ms = 0;
   if (!first_frame_ && last_departure_ts_ > 0) {
-    inter_frame_departure_ms = timing.first_packet_departure_timestamp - last_departure_ts_;
+    inter_frame_departure_ms =
+        timing.first_packet_departure_timestamp - last_departure_ts_;
   }
   last_departure_ts_ = timing.first_packet_departure_timestamp;
 
-  // Calculate frame-level jitter (difference between inter-arrival and inter-departure times)
+  // Calculate frame-level jitter (difference between inter-arrival and
+  // inter-departure times)
   int64_t frame_jitter_ms = 0;
   if (!first_frame_ && last_arrival_ts_ > 0) {
-    int64_t inter_frame_arrival_ms = timing.last_packet_arrival_timestamp - last_arrival_ts_;
+    int64_t inter_frame_arrival_ms =
+        timing.last_packet_arrival_timestamp - last_arrival_ts_;
     frame_jitter_ms = inter_frame_arrival_ms - inter_frame_departure_ms;
   }
   last_arrival_ts_ = timing.last_packet_arrival_timestamp;
@@ -797,61 +859,60 @@ void GtkMainWnd::VideoRenderer::LogFrameMetrics(const webrtc::VideoFrame& frame)
   if (first_frame_) {
     first_frame_ = false;
   }
-  
+
   // Initialize offset using first frame's data
   if (!offset_initialized_ && timing.network_delay_ms > 0) {
     // Calculate offset using RTP timestamp and actual departure time
     // Note: We don't include encode_ms in offset calculation as requested
-    rtp_time_offset_ = timing.first_packet_arrival_timestamp - (timing.network_delay_ms - 5) - (rtp_ms + timing.encode_ms); 
+    rtp_time_offset_ = timing.first_packet_arrival_timestamp -
+                       (timing.network_delay_ms - 5) -
+                       (rtp_ms + timing.encode_ms);
     offset_initialized_ = true;
   }
 
   if (offset_initialized_) {
     // Calculate estimated departure and network delay
-    int estimated_departure = rtp_ms + rtp_time_offset_ + timing.encode_ms; // rtp_ms + offset --> capture time
-    int estimated_network_ms = timing.last_packet_arrival_timestamp - estimated_departure;
+    int estimated_departure =
+        rtp_ms + rtp_time_offset_ +
+        timing.encode_ms;  // rtp_ms + offset --> capture time
+    int estimated_network_ms =
+        timing.last_packet_arrival_timestamp - estimated_departure;
 
     // Before the frame_log_file_ << line, add:
     double avail_bw = 0.0;
     if (timing.frame_construction_delay_ms + 0.5 > 0) {
-        // Convert bytes to bits (* 8)
-        // Convert ms to seconds (/ 1000)
-        // Convert to Mbps (/ 1000000)
-        // Final formula: (bytes * 8) / (ms / 1000) / 1000000
-        // Simplified: (bytes * 8 * 1000) / (ms * 1000000)
-        avail_bw = (static_cast<double>(timing.encoded_size) * 8.0 * 1000.0) / 
-                  ((static_cast<double>(timing.frame_construction_delay_ms) +0.5) * 1000000.0);
+      // Convert bytes to bits (* 8)
+      // Convert ms to seconds (/ 1000)
+      // Convert to Mbps (/ 1000000)
+      // Final formula: (bytes * 8) / (ms / 1000) / 1000000
+      // Simplified: (bytes * 8 * 1000) / (ms * 1000000)
+      avail_bw =
+          (static_cast<double>(timing.encoded_size) * 8.0 * 1000.0) /
+          ((static_cast<double>(timing.frame_construction_delay_ms) + 0.5) *
+           1000000.0);
     }
 
-    const bool is_keyframe = timing.is_keyframe;                
-    const webrtc::VideoFrameType ftype = timing.frame_type;     
+    const bool is_keyframe = timing.is_keyframe;
+    const webrtc::VideoFrameType ftype = timing.frame_type;
 
-    frame_log_file_ << current_time << ","
-                    << frame.rtp_timestamp() << ","
+    frame_log_file_ << current_time << "," << frame.rtp_timestamp() << ","
                     << timing.first_packet_departure_timestamp << ","
                     << estimated_departure << ","
                     << timing.first_packet_arrival_timestamp << ","
                     << timing.last_packet_arrival_timestamp << ","
-                    << timing.render_ms << ","
-                    << timing.encode_ms << ","
-                    << timing.pacing_ms << ","
-                    << timing.network_ms << ","
-                    << estimated_network_ms << ","
-                    << timing.decode_ms << ","
+                    << timing.render_ms << "," << timing.encode_ms << ","
+                    << timing.pacing_ms << "," << timing.network_ms << ","
+                    << estimated_network_ms << "," << timing.decode_ms << ","
                     << timing.frame_construction_delay_ms << ","
                     << timing.inter_frame_delay_ms << ","
                     << inter_frame_departure_ms << ","  // New column
-                    << frame_jitter_ms << ","          // New column
-                    << timing.encoded_size << ","  
-                    << frame.width() << ","  
-                    << frame.height() << "," 
-                    << timing.network_delay_ms<< ","
-                    << avail_bw << ","
-                    << (is_keyframe ? 1 : 0) << ","             
-                    << ToCString(ftype)                         
-                    << "\n";
+                    << frame_jitter_ms << ","           // New column
+                    << timing.encoded_size << "," << frame.width() << ","
+                    << frame.height() << "," << timing.network_delay_ms << ","
+                    << avail_bw << "," << (is_keyframe ? 1 : 0) << ","
+                    << ToCString(ftype) << "\n";
   }
-  
+
   // Flush to ensure data is written immediately
   frame_log_file_.flush();
 }

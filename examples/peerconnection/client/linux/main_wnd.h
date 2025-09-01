@@ -11,8 +11,11 @@
 #ifndef EXAMPLES_PEERCONNECTION_CLIENT_LINUX_MAIN_WND_H_
 #define EXAMPLES_PEERCONNECTION_CLIENT_LINUX_MAIN_WND_H_
 
+#include <glib.h>     // Add this for gboolean and gpointer
+#include <gtk/gtk.h>  // Add this for GTK types
 #include <stdint.h>
 
+#include <fstream>
 #include <memory>
 #include <string>
 
@@ -24,9 +27,6 @@
 #include "examples/peerconnection/client/main_wnd.h"
 #include "examples/peerconnection/client/peer_connection_client.h"
 #include "rtc_base/buffer.h"
-#include <glib.h> // Add this for gboolean and gpointer
-#include <gtk/gtk.h> // Add this for GTK types
-#include <fstream>
 
 // Forward declarations.
 typedef struct _GtkWidget GtkWidget;
@@ -45,7 +45,11 @@ typedef struct _GdkEventConfigure GdkEventConfigure;
 class GtkMainWnd : public MainWindow {
  public:
   // juheon added
-  GtkMainWnd(const char* server, int port, bool autoconnect, bool autocall, bool headless);
+  GtkMainWnd(const char* server,
+             int port,
+             bool autoconnect,
+             bool autocall,
+             bool headless);
   ~GtkMainWnd();
 
   virtual void RegisterObserver(MainWndCallback* callback);
@@ -75,6 +79,9 @@ class GtkMainWnd : public MainWindow {
   // Callback for when the user clicks the "Connect" button.
   void OnClicked(GtkWidget* widget);
 
+  // Callback for the Bulk traffic button.
+  void OnBulkClicked(GtkWidget* widget);
+
   // Callback for keystrokes.  Used to capture Esc and Return.
   void OnKeyPress(GtkWidget* widget, GdkEventKey* key);
 
@@ -89,22 +96,22 @@ class GtkMainWnd : public MainWindow {
   void Draw(GtkWidget* widget, cairo_t* cr);
 
   // Display size reconfiguration
-  int desired_width_;  // Desired window width 
-  int desired_height_; // Desired window height
-  double scale_; // Current scale factor
-  bool window_resizing_; // Flag to prevent recursive resize
+  int desired_width_;     // Desired window width
+  int desired_height_;    // Desired window height
+  double scale_;          // Current scale factor
+  bool window_resizing_;  // Flag to prevent recursive resize
 
   // Add with other static callbacks at the top of the class
-  static gboolean OnConfigureCallback(GtkWidget* widget, 
-                                  GdkEventConfigure* event,
-                                  gpointer data);
+  static gboolean OnConfigureCallback(GtkWidget* widget,
+                                      GdkEventConfigure* event,
+                                      gpointer data);
   void OnConfigure(GtkWidget* widget, GdkEventConfigure* event);
-  void ResizeWindow (int width, int height);
-  std::string GetLogFolder() const; 
+  void ResizeWindow(int width, int height);
+  std::string GetLogFolder() const;
 
  protected:
   class VideoRenderer : public rtc::VideoSinkInterface<webrtc::VideoFrame> {
- public:
+   public:
     VideoRenderer(GtkMainWnd* main_wnd,
                   webrtc::VideoTrackInterface* track_to_render);
     virtual ~VideoRenderer();
@@ -122,7 +129,7 @@ class GtkMainWnd : public MainWindow {
     void InitializeLogging(const std::string& log_folder);
     void LogFrameMetrics(const webrtc::VideoFrame& frame);
 
-  protected:
+   protected:
     void SetSize(int width, int height);
 
     // Basic rendering members
@@ -158,11 +165,13 @@ class GtkMainWnd : public MainWindow {
 
  protected:
   GtkWidget* window_;     // Our main window.
+  GtkWidget* overlay_;    // Container for video and controls.
   GtkWidget* draw_area_;  // The drawing surface for rendering video streams.
   GtkWidget* vbox_;       // Container for the Connect UI.
   GtkWidget* server_edit_;
   GtkWidget* port_edit_;
-  GtkWidget* peer_list_;  // The list of peers.
+  GtkWidget* peer_list_;    // The list of peers.
+  GtkWidget* bulk_button_;  // Start/stop bulk SCTP traffic.
   MainWndCallback* callback_;
   std::string server_;
   std::string port_;
@@ -174,6 +183,7 @@ class GtkMainWnd : public MainWindow {
   int height_ = 0;
   rtc::Buffer draw_buffer_;
   int draw_buffer_size_;
+  bool bulk_started_ = false;  // Tracks bulk SCTP state.
 
   // juheon added
   bool headless_ = false;

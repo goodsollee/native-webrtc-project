@@ -9,6 +9,7 @@
  */
 
 #include "examples/peerconnection/client/conductor.h"
+#include "examples/peerconnection/client/websocket_client.h"
 
 #include <stddef.h>
 #include <filesystem>

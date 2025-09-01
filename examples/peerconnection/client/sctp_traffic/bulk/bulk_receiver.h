@@ -2,6 +2,9 @@
 #include <cstdint>
 #include "sctp_traffic/traffic.h"
 #include "rtc_base/task_utils/repeating_task.h"
+#include "api/task_queue/task_queue_base.h"
+#include "api/task_queue/task_queue_factory.h"
+#include "api/task_queue/default_task_queue_factory.h"
 
 class Conductor;
 
@@ -20,7 +23,7 @@ private:
 
   Conductor* conductor_ = nullptr;
   int period_ms_;
-  rtc::RepeatingTaskHandle task_;
+  webrtc::RepeatingTaskHandle task_;
 
   uint64_t rx_accum_ = 0;
   uint64_t rx_total_ = 0;

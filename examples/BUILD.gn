@@ -711,7 +711,11 @@ rtc_library("sctp_traffic") {
     "../rtc_base:logging",
     "../rtc_base:threading",                   
     "//third_party/abseil-cpp/absl/types:span",  
+    "//third_party/jsoncpp",
   ]
+  if (is_linux || is_chromeos) {
+    configs += [ ":websocket_config" ]  
+  }
 }
 
   rtc_executable("peerconnection_client") {

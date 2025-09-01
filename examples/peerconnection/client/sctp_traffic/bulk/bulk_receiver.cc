@@ -22,7 +22,7 @@ void Receiver::Attach(Conductor& c) {
 
   // 2) Periodic log timer
   last_ms_ = rtc::TimeMillis();
-  task_ = rtc::RepeatingTaskHandle::Start(
+  task_ = webrtc::RepeatingTaskHandle::Start(
       *conductor_->signaling_thread(), [this]() {
         Tick();
         return webrtc::TimeDelta::Millis(period_ms_);

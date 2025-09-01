@@ -2,6 +2,9 @@
 #include <vector>
 #include "sctp_traffic/traffic.h"
 #include "rtc_base/task_utils/repeating_task.h"
+#include "api/task_queue/task_queue_base.h"
+#include "api/task_queue/task_queue_factory.h"
+#include "api/task_queue/default_task_queue_factory.h"
 
 class Conductor;
 
@@ -27,7 +30,7 @@ private:
 
   Conductor* conductor_ = nullptr;
   Config cfg_;
-  rtc::RepeatingTaskHandle task_;
+  webrtc::RepeatingTaskHandle task_;
 
   std::vector<uint8_t> payload_;
   double target_bps_ = 0.0;

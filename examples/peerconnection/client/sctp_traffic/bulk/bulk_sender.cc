@@ -20,7 +20,7 @@ void Sender::Start(Conductor& c) {
   last_ms_ = rtc::TimeMillis();
 
   if (task_.Running()) task_.Stop();
-  task_ = rtc::RepeatingTaskHandle::Start(
+  task_ = webrtc::RepeatingTaskHandle::Start(
       *conductor_->signaling_thread(), [this]() {
         PumpOnce(rtc::TimeMillis());
         return webrtc::TimeDelta::Millis(cfg_.pump_interval_ms);

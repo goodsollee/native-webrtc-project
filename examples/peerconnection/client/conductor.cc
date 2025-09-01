@@ -1296,14 +1296,39 @@ void Conductor::AddTracks() {
 }
 
 void Conductor::AddSCTPs() {
-  webrtc::DataChannelInit lowprio; lowprio.negotiated = true; lowprio.id = 0;  lowprio.ordered = true;  lowprio.maxRetransmits = 5;
+  webrtc::DataChannelInit lowprio;
+  lowprio.negotiated = true;
+  lowprio.id = 0;
+  lowprio.ordered = true;
+  lowprio.maxRetransmits = 5;
   lowprio.priority = webrtc::PriorityValue(webrtc::Priority::kLow);
 
-  webrtc::DataChannelInit highprio; highprio.id = 1;  highprio.ordered = true; highprio.maxRetransmits = 0;
-  highprio.priority = webrtc::PriorityValue(webrtc::Priority::kHigh);
+  // Dedicated negotiated channel for control messages.
+  webrtc::DataChannelInit ctrl;
+  ctrl.negotiated = true;
+  ctrl.id = 2;  // Reserve a specific ID for control channel
+  ctrl.ordered = true;
+  ctrl.priority = webrtc::PriorityValue(webrtc::Priority::kHigh);
 
-  // Example: open three flows
+  // Open bulk data flow and control flow.
   AddSctpFlow(TrafficKind::kBulkTest, "bulk", lowprio);
+  AddSctpFlow(TrafficKind::kControl, "ctrl", ctrl);
+
+  // Register handler for control messages to trigger remote bulk sending.
+  RegisterPayloadHandler(TrafficKind::kControl,
+                         [this](absl::Span<const uint8_t> bytes) {
+                           std::string cmd(bytes.begin(), bytes.end());
+                           if (cmd == "start") {
+                             if (!bulk_sender_)
+                               bulk_sender_ =
+                                   std::make_unique<sctp::bulk::Sender>();
+                             bulk_sender_->Start(*this);
+                           } else if (cmd == "stop") {
+                             if (bulk_sender_)
+                               bulk_sender_->Stop();
+                           }
+                         });
+
   //AddSctpFlow(TrafficKind::kKv,       "kv",   highprio);
   //AddSctpFlow(TrafficKind::kMesh,     "mesh", lowprio);
 
@@ -1325,14 +1350,17 @@ void Conductor::DisconnectFromCurrentPeer() {
 }
 
 void Conductor::StartBulkSctp() {
-  if (!bulk_sender_)
-    bulk_sender_ = std::make_unique<sctp::bulk::Sender>();
-  bulk_sender_->Start(*this);
+  const std::string cmd = "start";
+  SendPayload(TrafficKind::kControl,
+              absl::Span<const uint8_t>(
+                  reinterpret_cast<const uint8_t*>(cmd.data()), cmd.size()));
 }
 
 void Conductor::StopBulkSctp() {
-  if (bulk_sender_)
-    bulk_sender_->Stop();
+  const std::string cmd = "stop";
+  SendPayload(TrafficKind::kControl,
+              absl::Span<const uint8_t>(
+                  reinterpret_cast<const uint8_t*>(cmd.data()), cmd.size()));
 }
 
 void Conductor::ServiceWebSocket() {

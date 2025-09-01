@@ -82,7 +82,8 @@ MainWnd::MainWnd(const char* server,
       callback_(NULL),
       server_(server),
       auto_connect_(auto_connect),
-      auto_call_(auto_call) {
+      auto_call_(auto_call),
+      bulk_started_(false) {
   char buffer[10];
   snprintf(buffer, sizeof(buffer), "%i", port);
   port_ = buffer;
@@ -199,6 +200,12 @@ void MainWnd::SwitchToStreamingUI() {
   LayoutConnectUI(false);
   LayoutPeerListUI(false);
   ui_ = STREAMING;
+
+  // Show the bulk SCTP control button.
+  bulk_started_ = false;
+  ::SetWindowText(button_, L"Start Bulk");
+  ::MoveWindow(button_, 10, 10, 120, 30, TRUE);
+  ::ShowWindow(button_, SW_SHOWNA);
 }
 
 void MainWnd::MessageBox(const char* caption, const char* text, bool is_error) {
@@ -347,7 +354,16 @@ void MainWnd::OnDefaultAction() {
       }
     }
   } else {
-    ::MessageBoxA(wnd_, "OK!", "Yeah", MB_OK);
+    // STREAMING UI: toggle bulk SCTP sender.
+    if (!bulk_started_) {
+      callback_->StartBulkSctp();
+      bulk_started_ = true;
+      ::SetWindowText(button_, L"Stop Bulk");
+    } else {
+      callback_->StopBulkSctp();
+      bulk_started_ = false;
+      ::SetWindowText(button_, L"Start Bulk");
+    }
   }
 }
 

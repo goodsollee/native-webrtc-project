@@ -35,6 +35,10 @@ class MainWndCallback {
 
   virtual std::string GetLogFolder() const = 0;
 
+  // Controls bulk SCTP traffic.
+  virtual void StartBulkSctp() = 0;
+  virtual void StopBulkSctp() = 0;
+
  protected:
   virtual ~MainWndCallback() {}
 };
@@ -202,6 +206,8 @@ class MainWnd : public MainWindow {
   std::string port_;
   bool auto_connect_;
   bool auto_call_;
+  // Tracks current state of bulk SCTP sender button.
+  bool bulk_started_ = false;
 };
 #endif  // WIN32
 

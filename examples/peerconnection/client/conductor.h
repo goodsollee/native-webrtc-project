@@ -11,15 +11,19 @@
 #ifndef EXAMPLES_PEERCONNECTION_CLIENT_CONDUCTOR_H_
 #define EXAMPLES_PEERCONNECTION_CLIENT_CONDUCTOR_H_
 
-#include <fstream>
+#include <curl/curl.h>
+
+#include <cstdint>
 #include <deque>
+#include <fstream>
+#include <functional>
+#include <iostream>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
-#include <cstdint>
-#include <functional>
-#include <optional>
 
+#include "absl/types/span.h"
 #include "api/data_channel_interface.h"
 #include "api/jsep.h"
 #include "api/media_stream_interface.h"
@@ -28,16 +32,14 @@
 #include "api/rtp_receiver_interface.h"
 #include "api/scoped_refptr.h"
 #include "api/task_queue/task_queue_factory.h"
-#include "absl/types/span.h"
 #include "examples/peerconnection/client/main_wnd.h"
 #include "examples/peerconnection/client/peer_connection_client.h"
-#include "rtc_base/thread.h"
-
 #include "examples/peerconnection/client/rtc_stats_collector.h"
 #include "examples/peerconnection/client/websocket_client.h"
-#include <curl/curl.h>
 #include "json/value.h"
-#include <iostream>
+#include "rtc_base/thread.h"
+#include "sctp_traffic/bulk/bulk_receiver.h"
+#include "sctp_traffic/bulk/bulk_sender.h"
 
 namespace webrtc {
 class VideoCaptureModule;
@@ -169,6 +171,9 @@ class Conductor : public webrtc::PeerConnectionObserver,
 
   void DisconnectFromCurrentPeer() override;
 
+  void StartBulkSctp() override;
+  void StopBulkSctp() override;
+
   void UIThreadCallback(int msg_id, void* data) override;
 
   // CreateSessionDescriptionObserver implementation.
@@ -207,64 +212,73 @@ class Conductor : public webrtc::PeerConnectionObserver,
        {"bulk", TrafficKind::kBulkTest}
    };
 
-  /*
-  rtc::scoped_refptr<webrtc::DataChannelInterface> data_channel_;
-  std::unique_ptr<MyDataObserver> data_observer_;
+   // Bulk SCTP traffic helpers.
+   std::unique_ptr<sctp::bulk::Sender> bulk_sender_;
+   std::unique_ptr<sctp::bulk::Receiver> bulk_receiver_;
 
-  std::optional<TrafficKind> payload_kind_;
-  PayloadHandler payload_handler_;
-  */
+   /*
+   rtc::scoped_refptr<webrtc::DataChannelInterface> data_channel_;
+   std::unique_ptr<MyDataObserver> data_observer_;
 
-  PeerConnectionClient* client_;
-  MainWindow* main_wnd_;
-  std::deque<std::string*> pending_messages_;
+   std::optional<TrafficKind> payload_kind_;
+   PayloadHandler payload_handler_;
+   */
 
- private:
-  std::unique_ptr<WebSocketClient> ws_client_;
+   PeerConnectionClient* client_;
+   MainWindow* main_wnd_;
+   std::deque<std::string*> pending_messages_;
 
-  void OnWebSocketMessage(const std::string& message);
-  void OnWebSocketConnection(bool connected);
-  
-  Json::Value messages_;
-  
-  bool is_initiator_;
-  bool peer_connected_ = false;
-  
-  std::string client_id_;
-  std::string room_id_;
-  std::string server_;
-  Json::Value initial_messages_;
+  private:
+   std::unique_ptr<WebSocketClient> ws_client_;
 
-  std::string post_url_; // For HTTP POST when initiator
+   void OnWebSocketMessage(const std::string& message);
+   void OnWebSocketConnection(bool connected);
 
-  static bool curl_initialized_;
-  CURL* curl_ = nullptr;
-  static size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp);
-  bool InitializeCurl();
-  void CleanupCurl();
-  std::string response_buffer_;
+   Json::Value messages_;
 
-  std::string net_interface_;
-  bool is_emulation_ = false;
-  bool is_sender_ = true;
-  std::string y4m_path_;
-  std::string log_dir_;
+   bool is_initiator_;
+   bool peer_connected_ = false;
 
-  // juheon added
-  bool headless_ = false;
+   std::string client_id_;
+   std::string room_id_;
+   std::string server_;
+   Json::Value initial_messages_;
 
-  void StopStats ();
-  void GetReceiverVideoStats();
+   std::string post_url_;  // For HTTP POST when initiator
 
-  std::unique_ptr<RTCStatsCollector> stats_collector_;
+   static bool curl_initialized_;
+   CURL* curl_ = nullptr;
+   static size_t WriteCallback(void* contents,
+                               size_t size,
+                               size_t nmemb,
+                               void* userp);
+   bool InitializeCurl();
+   void CleanupCurl();
+   std::string response_buffer_;
 
-  using StatsCallback = std::function<void(StatsType type, const std::string& message)>;
-  using RateCallback = std::function<void(double bitrate_bps, double framerate_fps)>;
-  using ResolutionCallback = std::function<void(int width, int height)>;
+   std::string net_interface_;
+   bool is_emulation_ = false;
+   bool is_sender_ = true;
+   std::string y4m_path_;
+   std::string log_dir_;
 
-  StatsCallback stats_callback_;
-  RateCallback rate_callback_;
-  ResolutionCallback resolution_callback_;
+   // juheon added
+   bool headless_ = false;
+
+   void StopStats();
+   void GetReceiverVideoStats();
+
+   std::unique_ptr<RTCStatsCollector> stats_collector_;
+
+   using StatsCallback =
+       std::function<void(StatsType type, const std::string& message)>;
+   using RateCallback =
+       std::function<void(double bitrate_bps, double framerate_fps)>;
+   using ResolutionCallback = std::function<void(int width, int height)>;
+
+   StatsCallback stats_callback_;
+   RateCallback rate_callback_;
+   ResolutionCallback resolution_callback_;
 
 };
 

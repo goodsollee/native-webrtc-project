@@ -504,7 +504,12 @@ bool Conductor::CreatePeerConnection() {
 
 void Conductor::DeletePeerConnection() {
   stats_collector_->Stop();
-  
+
+  if (bulk_sender_)
+    bulk_sender_->Stop();
+  if (bulk_receiver_)
+    bulk_receiver_->Detach();
+
   main_wnd_->StopLocalRenderer();
   main_wnd_->StopRemoteRenderer();
   peer_connection_ = nullptr;
@@ -1299,6 +1304,10 @@ void Conductor::AddSCTPs() {
   AddSctpFlow(TrafficKind::kBulkTest, "bulk", lowprio);
   AddSctpFlow(TrafficKind::kKv,       "kv",   highprio);
   AddSctpFlow(TrafficKind::kMesh,     "mesh", lowprio);
+
+  if (!bulk_receiver_)
+    bulk_receiver_ = std::make_unique<sctp::bulk::Receiver>();
+  bulk_receiver_->Attach(*this);
 }
 
 void Conductor::DisconnectFromCurrentPeer() {
@@ -1310,6 +1319,17 @@ void Conductor::DisconnectFromCurrentPeer() {
 
   if (main_wnd_->IsWindow())
     main_wnd_->SwitchToPeerList(client_->peers());
+}
+
+void Conductor::StartBulkSctp() {
+  if (!bulk_sender_)
+    bulk_sender_ = std::make_unique<sctp::bulk::Sender>();
+  bulk_sender_->Start(*this);
+}
+
+void Conductor::StopBulkSctp() {
+  if (bulk_sender_)
+    bulk_sender_->Stop();
 }
 
 void Conductor::ServiceWebSocket() {

@@ -1,10 +1,10 @@
 #pragma once
+#include <atomic>
+#include <cstdint>
+#include <thread>
 #include <vector>
+
 #include "sctp_traffic/traffic.h"
-#include "rtc_base/task_utils/repeating_task.h"
-#include "api/task_queue/task_queue_base.h"
-#include "api/task_queue/task_queue_factory.h"
-#include "api/task_queue/default_task_queue_factory.h"
 
 class Conductor;
 
@@ -18,19 +18,20 @@ struct Config {
 };
 
 class Sender final : public sctp::Sender {
-public:
+ public:
   explicit Sender(Config cfg = {});
   ~Sender() override;
 
   void Start(Conductor& c) override;
   void Stop() override;
 
-private:
+ private:
   void PumpOnce(int64_t now_ms);
 
   Conductor* conductor_ = nullptr;
   Config cfg_;
-  webrtc::RepeatingTaskHandle task_;
+  std::thread worker_;
+  std::atomic<bool> running_{false};
 
   std::vector<uint8_t> payload_;
   double target_bps_ = 0.0;
@@ -38,4 +39,4 @@ private:
   int64_t last_ms_ = 0;
 };
 
-} // namespace sctp::bulk
+}  // namespace sctp::bulk

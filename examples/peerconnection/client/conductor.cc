@@ -1333,7 +1333,7 @@ void Conductor::AddSCTPs() {
   //AddSctpFlow(TrafficKind::kMesh,     "mesh", lowprio);
 
   if (!bulk_receiver_) {
-    bulk_receiver_ = std::make_unique<sctp::bulk::Receiver>();
+    bulk_receiver_ = std::make_unique<sctp::bulk::Receiver>(log_dir_);
     bulk_receiver_->Attach(*this);
   }
 }
@@ -1350,6 +1350,8 @@ void Conductor::DisconnectFromCurrentPeer() {
 }
 
 void Conductor::StartBulkSctp() {
+  if (bulk_receiver_)
+    bulk_receiver_->LogStart();
   const std::string cmd = "start";
   SendPayload(TrafficKind::kControl,
               absl::Span<const uint8_t>(
@@ -1357,6 +1359,8 @@ void Conductor::StartBulkSctp() {
 }
 
 void Conductor::StopBulkSctp() {
+  if (bulk_receiver_)
+    bulk_receiver_->LogStop();
   const std::string cmd = "stop";
   SendPayload(TrafficKind::kControl,
               absl::Span<const uint8_t>(

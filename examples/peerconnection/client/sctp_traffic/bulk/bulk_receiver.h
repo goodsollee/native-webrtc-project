@@ -1,33 +1,34 @@
 #pragma once
+#include <atomic>
+#include <chrono>
 #include <cstdint>
+#include <thread>
+
 #include "sctp_traffic/traffic.h"
-#include "rtc_base/task_utils/repeating_task.h"
-#include "api/task_queue/task_queue_base.h"
-#include "api/task_queue/task_queue_factory.h"
-#include "api/task_queue/default_task_queue_factory.h"
 
 class Conductor;
 
 namespace sctp::bulk {
 
 class Receiver final : public sctp::Receiver {
-public:
+ public:
   explicit Receiver(int log_period_ms = 1000);
   ~Receiver() override;
 
   void Attach(Conductor& c) override;
   void Detach() override;
 
-private:
+ private:
   void Tick();
 
   Conductor* conductor_ = nullptr;
   int period_ms_;
-  webrtc::RepeatingTaskHandle task_;
+  std::thread worker_;
+  std::atomic<bool> running_{false};
 
   uint64_t rx_accum_ = 0;
   uint64_t rx_total_ = 0;
-  int64_t  last_ms_  = 0;
+  int64_t last_ms_ = 0;
 };
 
-} // namespace sctp::bulk
+}  // namespace sctp::bulk

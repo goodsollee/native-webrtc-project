@@ -44,7 +44,7 @@ def main() -> None:
     bitrates = [float(r["bitrates"]) / 1e6 for r in avg_rows]
 
     sctp_times = [
-        (float(r["Time"]) - float(sctp_rows[0]["Time"])) / 1000.0
+        (float(r["Time"]) - float(avg_rows[0]["timestamp_ms"])) / 1000.0
         for r in sctp_rows
     ]
     throughput = [float(r["Throughput"]) for r in sctp_rows]
@@ -56,12 +56,12 @@ def main() -> None:
     start_drawn = stop_drawn = False
     for r, t in zip(sctp_rows, sctp_times):
         if r.get("Start") == "1" and not start_drawn:
-            ax.axvline(t, color="green", linestyle="--", label="Start")
+            ax.axvline(t, color="green", linestyle="--", label="SCTP start")
             start_drawn = True
         elif r.get("Start") == "1":
             ax.axvline(t, color="green", linestyle="--")
         if r.get("Stop") == "1" and not stop_drawn:
-            ax.axvline(t, color="red", linestyle="--", label="Stop")
+            ax.axvline(t, color="red", linestyle="--", label="SCTP stop")
             stop_drawn = True
         elif r.get("Stop") == "1":
             ax.axvline(t, color="red", linestyle="--")
@@ -70,6 +70,7 @@ def main() -> None:
     ax.set_ylabel("Rate (Mbps)")
     ax.legend()
     plt.tight_layout()
+    plt.show()
     plt.savefig(args.output)
     print(f"Plot saved to {args.output}")
 

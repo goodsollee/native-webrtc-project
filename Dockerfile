@@ -12,8 +12,9 @@ RUN apt-get update && apt-get install -y \
     libx11-dev libxext-dev libxcomposite-dev libxrandr-dev \
     libxi-dev libxrender-dev libxtst-dev libxdamage-dev libxfixes-dev \
     libdrm-dev libgbm-dev libxkbcommon-dev libxshmfence-dev \
-    libpci-dev libudev-dev \
+    libpci-dev libudev-dev libcurl4-openssl-dev \
     libwebsockets-dev zlib1g-dev libssl-dev \
+    pkg-config \
  && rm -rf /var/lib/apt/lists/*
 
 # depot_tools

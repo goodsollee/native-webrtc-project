@@ -41,6 +41,7 @@
 #include "rtc_base/thread.h"
 #include "sctp_traffic/bulk/bulk_receiver.h"
 #include "sctp_traffic/bulk/bulk_sender.h"
+#include "sctp_traffic/file/file_sender.h"
 
 namespace webrtc {
 class VideoCaptureModule;
@@ -219,6 +220,7 @@ class Conductor : public webrtc::PeerConnectionObserver,
    // Bulk SCTP traffic helpers.
    std::unique_ptr<sctp::bulk::Sender> bulk_sender_;
    std::unique_ptr<sctp::bulk::Receiver> bulk_receiver_;
+   std::vector<std::unique_ptr<sctp::file::Sender>> file_senders_;
 
    /*
    rtc::scoped_refptr<webrtc::DataChannelInterface> data_channel_;

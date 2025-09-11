@@ -731,6 +731,8 @@ rtc_library("sctp_traffic") {
       "peerconnection/client/traffic_profile.h",
       "peerconnection/client/rtc_stats_collector.cc",
       "peerconnection/client/rtc_stats_collector.h",
+      "peerconnection/client/sctp_traffic/file/file_sender.cc",
+      "peerconnection/client/sctp_traffic/file/file_sender.h",
     ]
 
     deps = [

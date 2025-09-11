@@ -1299,45 +1299,33 @@ void Conductor::AddTracks() {
 }
 
 void Conductor::AddSCTPs() {
-  webrtc::DataChannelInit lowprio;
-  lowprio.negotiated = true;
-  lowprio.id = 0;
-  lowprio.ordered = true;
-  lowprio.maxRetransmits = 5;
-  lowprio.priority = webrtc::PriorityValue(webrtc::Priority::kLow);
+  webrtc::DataChannelInit cfg;
+  cfg.negotiated = true;
+  cfg.ordered = true;
 
-  // Dedicated negotiated channel for control messages.
-  webrtc::DataChannelInit ctrl;
-  ctrl.negotiated = true;
-  ctrl.id = 2;  // Reserve a specific ID for control channel
-  ctrl.ordered = true;
-  ctrl.priority = webrtc::PriorityValue(webrtc::Priority::kHigh);
+  int next_id = 0;
+  int next_kind = 100;  // Base value for dynamically created kinds.
 
-  // Open bulk data flow and control flow.
-  AddSctpFlow(TrafficKind::kBulkTest, "bulk", lowprio);
-  AddSctpFlow(TrafficKind::kControl, "ctrl", ctrl);
+  for (const auto& profile : traffic_profiles_) {
+    if (profile.protocol != "SCTP")
+      continue;
 
-  // Register handler for control messages to trigger remote bulk sending.
-  RegisterPayloadHandler(TrafficKind::kControl,
-                         [this](absl::Span<const uint8_t> bytes) {
-                           std::string cmd(bytes.begin(), bytes.end());
-                           if (cmd == "start") {
-                             if (!bulk_sender_)
-                               bulk_sender_ =
-                                   std::make_unique<sctp::bulk::Sender>();
-                             bulk_sender_->Start(*this);
-                           } else if (cmd == "stop") {
-                             if (bulk_sender_)
-                               bulk_sender_->Stop();
-                           }
-                         });
+    cfg.id = next_id++;
+    TrafficKind kind = static_cast<TrafficKind>(next_kind++);
 
-  //AddSctpFlow(TrafficKind::kKv,       "kv",   highprio);
-  //AddSctpFlow(TrafficKind::kMesh,     "mesh", lowprio);
+    AddSctpFlow(kind, profile.traffic_name, cfg);
 
-  if (!bulk_receiver_) {
-    bulk_receiver_ = std::make_unique<sctp::bulk::Receiver>(log_dir_);
-    bulk_receiver_->Attach(*this);
+    if (profile.pattern == "Periodic") {
+      auto sender = std::make_unique<sctp::file::Sender>(
+          static_cast<int>(kind), profile.file_size, profile.periodicity);
+      sender->Start(*this);
+      file_senders_.push_back(std::move(sender));
+    } else if (profile.pattern == "Custom") {
+      auto sender = std::make_unique<sctp::file::Sender>(
+          static_cast<int>(kind), profile.custom_trace);
+      sender->Start(*this);
+      file_senders_.push_back(std::move(sender));
+    }
   }
 }
 

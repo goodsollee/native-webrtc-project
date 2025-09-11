@@ -107,6 +107,10 @@ int PASCAL wWinMain(HINSTANCE instance,
   rtc::InitializeSSL();
   PeerConnectionClient client;
   auto conductor = rtc::make_ref_counted<Conductor>(&client, &wnd);
+  std::string traffic_csv = absl::GetFlag(FLAGS_traffic_csv);
+  if (!traffic_csv.empty()) {
+    conductor->SetTrafficProfile(traffic_csv);
+  }
 
   // Main loop.
   MSG msg;

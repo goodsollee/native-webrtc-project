@@ -176,6 +176,10 @@ Example Commands:
   rtc::InitializeSSL();
   PeerConnectionClient client;
   auto conductor = rtc::make_ref_counted<Conductor>(&client, &wnd, absl::GetFlag(FLAGS_headless));
+  std::string traffic_csv = absl::GetFlag(FLAGS_traffic_csv);
+  if (!traffic_csv.empty()) {
+    conductor->SetTrafficProfile(traffic_csv);
+  }
   conductor->SetRoomId(absl::GetFlag(FLAGS_room_id));
 
   // Get log date - if empty, use current date

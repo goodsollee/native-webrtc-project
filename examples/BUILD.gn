@@ -727,6 +727,8 @@ rtc_library("sctp_traffic") {
       "peerconnection/client/defaults.h",
       "peerconnection/client/peer_connection_client.cc",
       "peerconnection/client/peer_connection_client.h",
+      "peerconnection/client/traffic_profile.cc",
+      "peerconnection/client/traffic_profile.h",
       "peerconnection/client/rtc_stats_collector.cc",
       "peerconnection/client/rtc_stats_collector.h",
     ]
@@ -858,6 +860,8 @@ rtc_library("sctp_traffic") {
       "peerconnection/client/defaults.h",
       "peerconnection/client/peer_connection_client.cc",
       "peerconnection/client/peer_connection_client.h",
+      "peerconnection/client/traffic_profile.cc",
+      "peerconnection/client/traffic_profile.h",
       "peerconnection/client/rtc_stats_collector.cc",
       "peerconnection/client/rtc_stats_collector.h",
     ]

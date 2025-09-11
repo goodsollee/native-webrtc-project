@@ -35,6 +35,7 @@
 #include "examples/peerconnection/client/main_wnd.h"
 #include "examples/peerconnection/client/peer_connection_client.h"
 #include "examples/peerconnection/client/rtc_stats_collector.h"
+#include "examples/peerconnection/client/traffic_profile.h"
 #include "examples/peerconnection/client/websocket_client.h"
 #include "json/value.h"
 #include "rtc_base/thread.h"
@@ -96,6 +97,8 @@ class Conductor : public webrtc::PeerConnectionObserver,
   void SetHeadless(bool headless) { headless_ = headless; }
 
   void SetLogDirectory(const std::string& log_dir) { log_dir_ = log_dir; }
+
+  void SetTrafficProfile(const std::string& path) { traffic_csv_path_ = path; }
 
   enum class TrafficKind {kKv, kMesh, kBulkTest, kControl};
   using PayloadHandler = std::function<void(absl::Span<const uint8_t>)>;
@@ -261,7 +264,10 @@ class Conductor : public webrtc::PeerConnectionObserver,
    bool is_emulation_ = false;
    bool is_sender_ = true;
    std::string y4m_path_;
-   std::string log_dir_;
+  std::string log_dir_;
+
+  std::string traffic_csv_path_;
+  std::vector<TrafficProfile> traffic_profiles_;
 
    // juheon added
    bool headless_ = false;

@@ -279,6 +279,9 @@ Conductor::~Conductor() {
 }
 
 void Conductor::Start () {
+  if (!traffic_csv_path_.empty()) {
+    traffic_profiles_ = LoadProfiles(traffic_csv_path_);
+  }
   client_->RegisterObserver(this);
   main_wnd_->RegisterObserver(this);
 }

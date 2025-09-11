@@ -54,4 +54,9 @@ ABSL_FLAG(
     "will assign the group Enabled to field trial WebRTC-FooFeature. Multiple "
     "trials are separated by \"/\"");
 
+ABSL_FLAG(std::string,
+          traffic_csv,
+          "",
+          "CSV file describing traffic profiles");
+
 #endif  // EXAMPLES_PEERCONNECTION_CLIENT_FLAG_DEFS_H_
